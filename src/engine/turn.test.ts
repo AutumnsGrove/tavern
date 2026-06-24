@@ -1,16 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
-import { buildToolHandlers } from "./turn";
-import type { GameStore } from "../state/store";
-import type { SrdLoader } from "../srd/loader";
-
-// We test the tool handlers directly since the full handleTurn
-// requires a real D1 database. The handlers are the interesting part.
-
-// Expose the function for testing
-// (We'll need to export it — for now, test via the module)
-
-// Since buildToolHandlers is not exported, we test it indirectly
-// by testing the pieces it calls: resolver + skills
+import { describe, it, expect } from "vitest";
 
 describe("turn handler integration", () => {
   it("resolve produces valid results for stealth check", async () => {
