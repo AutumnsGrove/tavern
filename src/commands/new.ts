@@ -16,6 +16,7 @@ import type { SrdLoader } from "../srd/loader";
 import { rollAbilityScores } from "../resolver/dice";
 import { abilityModifier, proficiencyBonus } from "../resolver/skills";
 import { renderCharacterSheet } from "../state/documents";
+import { config } from "../config";
 
 export function newCommand(store: GameStore, srd: SrdLoader): CommandDef {
   return {
@@ -27,7 +28,7 @@ export function newCommand(store: GameStore, srd: SrdLoader): CommandDef {
       const name = parts[0] || "Adventurer";
       const className = parts[1] || "Fighter";
       const race = parts[2] || "Human";
-      const level = parseInt(parts[3] || "3", 10);
+      const level = parseInt(parts[3] || String(config.defaultLevel), 10);
 
       // Roll ability scores
       const { scores, details } = rollAbilityScores();

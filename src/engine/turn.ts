@@ -15,6 +15,7 @@ import { NarratorClient } from "../narrator/client";
 import { runNarratorLoop } from "../narrator/loop";
 import { ALL_TOOLS } from "../narrator/tools/registry";
 import { buildContext } from "./context";
+import { config } from "../config";
 import { resolve, resolveDamage } from "../resolver/dice";
 import {
   skillModifier,
@@ -63,7 +64,7 @@ export async function handleTurn(deps: TurnDeps, input: TurnInput): Promise<Turn
   const flags = await store.getFlags(saveId);
   const scenes = await store.getScenes(saveId);
   const combat = await store.getCombat(saveId);
-  const recentMessages = await store.getRecentMessages(saveId, 30);
+  const recentMessages = await store.getRecentMessages(saveId, config.hotContextMessages);
 
   // Render documents
   const characterSheet = character
@@ -111,13 +112,18 @@ export async function handleTurn(deps: TurnDeps, input: TurnInput): Promise<Turn
   const handlers = buildToolHandlers(store, srd, saveId, character, traceLines);
 
   // Run narrator loop
-  const client = new NarratorClient({ apiKey, model });
+  const client = new NarratorClient({
+    apiKey,
+    model,
+    maxTokens: config.narratorMaxTokens,
+    temperature: config.narratorTemperature,
+  });
   const result = await runNarratorLoop({
     client,
     tools: ALL_TOOLS,
     handlers,
     messages,
-    maxIterations: 20,
+    maxIterations: config.maxToolIterations,
     onToolCall: (name, args, resultData) => {
       // Build trace lines for interesting tool calls
       if (name === "request_roll" || name === "request_damage") {

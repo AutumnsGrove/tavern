@@ -19,6 +19,7 @@ import { CommandRegistry } from "../gateway/commands";
 import { registerCommands } from "../commands";
 import { handleTurn } from "../engine/turn";
 import type { Fork } from "../gateway/types";
+import { config } from "../config";
 
 // ── Config ──────────────────────────────────────────────────────
 
@@ -113,9 +114,9 @@ async function main() {
 
   // Get or create settings
   const settings = await store.getSettings(CHAT_ID);
-  let model = settings.model || "anthropic/claude-sonnet-4";
-  let narrationMode = (settings.narration_mode || "verbose") as "verbose" | "concise";
-  let tracesEnabled = !!settings.traces_enabled;
+  let model = settings.model || config.defaultModel;
+  let narrationMode = (settings.narration_mode || config.defaultNarrationMode) as "verbose" | "concise";
+  let tracesEnabled = !!(settings.traces_enabled ?? config.defaultTracesEnabled);
 
   // Track current forks for number selection
   let currentForks: Fork[] = [];

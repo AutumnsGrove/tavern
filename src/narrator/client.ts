@@ -53,6 +53,8 @@ export class NarratorClient {
   private temperature: number;
 
   constructor(opts: ClientOptions) {
+    // Defaults are in config.ts — import there if you need them.
+    // Here we just accept whatever the caller passes.
     this.apiKey = opts.apiKey;
     this.model = opts.model;
     this.maxTokens = opts.maxTokens ?? 4096;
