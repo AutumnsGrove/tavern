@@ -8,7 +8,7 @@
 
 import { abilityModifier, proficiencyBonus, skillModifier, SKILL_TO_ABILITY } from "../resolver/skills";
 import type { Character, InventoryItem, Npc, Flag, Scene } from "./store";
-import type { ModifierLookupParams, CharacterScores } from "../resolver/skills";
+import type { Ability, ModifierLookupParams, CharacterScores } from "../resolver/skills";
 
 function sign(n: number): string {
   return n >= 0 ? `+${n}` : `${n}`;
@@ -26,7 +26,7 @@ function buildModifierParams(char: Character): ModifierLookupParams {
     },
     level: char.level,
     skillProficiencies: JSON.parse(char.skill_proficiencies) as string[],
-    saveProficiencies: JSON.parse(char.save_proficiencies) as string[],
+    saveProficiencies: JSON.parse(char.save_proficiencies) as Ability[],
   };
 }
 
