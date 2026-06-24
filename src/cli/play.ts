@@ -20,6 +20,7 @@ import { registerCommands } from "../commands";
 import { handleTurn } from "../engine/turn";
 import type { Fork } from "../gateway/types";
 import { config } from "../config";
+import { getActiveFlow, handleOnboardingInput } from "../commands/new";
 
 // ── Config ──────────────────────────────────────────────────────
 
@@ -155,6 +156,24 @@ async function main() {
       console.log(`${DIM}→ ${text}${RESET}`);
     }
 
+    // Check if onboarding flow is active — intercept input
+    if (getActiveFlow(CHAT_ID) && !text.startsWith("/")) {
+      try {
+        const result = await handleOnboardingInput(CHAT_ID, text, store, srd);
+        printNarrative(result.text);
+        if (result.forks?.length) {
+          currentForks = result.forks;
+          printForks(result.forks);
+        } else {
+          currentForks = [];
+        }
+      } catch (err) {
+        printError(`Onboarding error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      rl.prompt();
+      return;
+    }
+
     // Check for commands
     const parsed = commands.parse(text);
     if (parsed) {
@@ -184,6 +203,13 @@ async function main() {
 
       const result = await def.handler({ chatId: CHAT_ID, saveId, args: parsed.args });
       console.log(`\n${result.text}`);
+
+      // /new returns forks for interactive onboarding
+      if (result.forks?.length) {
+        currentForks = result.forks;
+        printForks(result.forks);
+      }
+
       rl.prompt();
       return;
     }

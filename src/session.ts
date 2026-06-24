@@ -18,6 +18,7 @@ import { CommandRegistry } from "./gateway/commands";
 import { registerCommands } from "./commands";
 import { handleTurn } from "./engine/turn";
 import { config } from "./config";
+import { getActiveFlow, handleOnboardingInput } from "./commands/new";
 
 export class GameSession implements DurableObject {
   private env: Env;
@@ -86,6 +87,21 @@ export class GameSession implements DurableObject {
 
     if (!text) return;
 
+    // Check if onboarding flow is active — intercept input
+    if (getActiveFlow(chatId) && !text.startsWith("/")) {
+      try {
+        const result = await handleOnboardingInput(chatId, text, this.store, this.srd);
+        await this.adapter.send(chatId, {
+          text: result.text,
+          forks: result.forks,
+        });
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        await this.adapter.send(chatId, { text: `⚠️ Onboarding error: ${errMsg}`, isError: true });
+      }
+      return;
+    }
+
     // Check for commands
     const cmdParsed = this.commands.parse(text);
     if (cmdParsed) {
@@ -132,7 +148,10 @@ export class GameSession implements DurableObject {
     }
 
     const result = await def.handler({ chatId, saveId, args });
-    await this.adapter.send(chatId, { text: result.text });
+    await this.adapter.send(chatId, {
+      text: result.text,
+      forks: result.forks,
+    });
   }
 
   private async handleGameInput(text: string, chatId: string): Promise<void> {
