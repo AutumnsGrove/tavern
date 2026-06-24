@@ -800,12 +800,24 @@ maybe 8-10 messages. Concise mode helps here.
 ## 12. SRD Reference Data
 
 The D&D 5e System Reference Document (SRD 5.1) is released under CC BY 4.0.
-We embed the mechanical data as structured JSON, bundled into the Worker.
+We embed the mechanical data as structured JSON.
 
-### Storage: bundled, not queried
+### Storage: KV for production, imported locally
 
-SRD data ships with the code as JSON imports. In the Worker, it's in-memory.
-Locally, it's imported from disk. No database, no network calls for lookups.
+The free Workers plan allows only 3 MB compressed bundles and 10ms CPU per
+request. Bundling 1-3 MB of SRD JSON into the Worker wastes bundle space on
+a process that just forwards to a Durable Object.
+
+**Production:** SRD data lives in Cloudflare KV (free tier: 100K reads/day).
+A one-time setup script uploads all SRD JSON to KV keyed by category and name
+(e.g. `srd:class:monk`, `srd:spell:stunning_strike`). The Durable Object
+reads from KV on first access and caches in memory for the session lifetime.
+
+**Local dev:** SRD data imported from disk as JSON modules. Same query
+interface (`srd.lookup("class", "monk")`), different backing store.
+
+The `srd/loader.ts` module abstracts this — consumers call `lookup()` and
+don't know whether the data came from KV, memory cache, or a local import.
 
 ### Data structure
 
@@ -1141,13 +1153,13 @@ settings:
 
 ```bash
 # Run a single sim
-npm run sim -- sims/combat_test.yaml
+pnpm run sim -- sims/combat_test.yaml
 
 # Run all sims
-npm run sim -- sims/
+pnpm run sim -- sims/
 
 # Compare models on same scenario
-npm run sim -- sims/combat_test.yaml --models "claude-sonnet,qwen3-235b,llama-70b"
+pnpm run sim -- sims/combat_test.yaml --models "claude-sonnet,qwen3-235b,llama-70b"
 ```
 
 ### Sim output
@@ -1178,49 +1190,78 @@ Avg response time: 3.2s
 
 ## 19. Cloudflare Deployment
 
+### Free tier constraints
+
+The Workers free plan imposes hard limits that shape the architecture:
+- **Bundle size:** 3 MB compressed (plenty for code, not for bundling SRD data)
+- **CPU time:** 10 ms per request (enough to receive a webhook and forward it)
+- **D1:** 5 GB storage, 5M rows read/day, 100K rows written/day
+- **KV:** 100K reads/day, 1K writes/day (perfect for SRD: write once, read often)
+- **Durable Objects:** available (30s+ per request, persistent in-memory state)
+
+### Architecture: thin Worker + Durable Object
+
+The 10ms CPU limit means the Worker cannot run the narrator loop, resolve dice,
+or build context. It is a **pure webhook receiver** that hands off immediately.
+
+```
+Telegram → Worker (POST /webhook)
+              │
+              │  ~2ms CPU: parse, look up DO by chat_id
+              ▼
+           Durable Object (GameSession)
+              │
+              │  Runs the full turn: narrator loop, tool calls,
+              │  state updates, dice resolution. 30s+ budget.
+              ▼
+           Responds to Telegram via fetch()
+```
+
 ### Worker
 
-The main entry point. Handles:
-- Telegram webhook (`POST /webhook`)
-- Request routing
-- Short-lived operations (most turns complete in <30s)
+Thin entry point. Receives webhooks, routes to the correct Durable Object.
 
 ```typescript
 // worker/index.ts
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    // Route: webhook, health check, etc.
+    const chatId = extractChatId(request);
+    const id = env.GAME_SESSION.idFromName(chatId);
+    const stub = env.GAME_SESSION.get(id);
+    return stub.fetch(request);
   }
 }
 ```
 
-### D1
+### Durable Object: GameSession
 
-SQLite database. Same schema as local development. Bound as `env.DB`.
-
-### Durable Objects
-
-For turns that exceed the Worker CPU time limit (30s on paid plan). The Worker
-hands off to a Durable Object when it detects the narrator is chaining many
-tool calls (complex combat, multi-roll sequences).
+The real engine. One DO instance per `chat_id`. Handles the entire turn lifecycle.
 
 ```typescript
 export class GameSession implements DurableObject {
-  // Long-running narrator loop
-  // Owns the WebSocket to the client (if streaming)
-  // Falls back here when Worker would timeout
+  // In-memory cache: SRD data, loaded from KV on first access
+  // Owns the narrator loop, tool dispatch, state management
+  // Reads/writes D1 for persistent state
+  // Calls OpenRouter for narration
+  // Responds directly to Telegram API
 }
 ```
 
-**When to use DO vs Worker:**
-- Simple turns (1-3 tool calls): Worker handles directly
-- Complex turns (combat rounds, multi-roll sequences): Worker creates/resumes
-  a Durable Object session
-- The engine detects complexity and escalates — the adapter doesn't know
+DOs persist in memory between requests (Cloudflare evicts idle DOs after
+~10-60s but re-creates them transparently on the next request). This means
+the SRD cache survives across turns within a play session — no repeated KV
+reads for the same class data.
 
-### KV (optional)
+### D1
 
-For caching SRD data if the bundle size becomes a concern. Not needed initially.
+SQLite database. Same schema as local development. Bound as `env.DB`.
+The DO accesses D1 for all persistent state (saves, characters, messages, rolls).
+
+### KV
+
+Stores the SRD reference data. Populated once via a setup script. Read by
+DOs and cached in memory. Free tier's 100K reads/day is more than sufficient
+(a busy play session might do 20-30 SRD lookups, and most are cache hits).
 
 ### Secrets
 
@@ -1255,20 +1296,24 @@ A single-page web app that mirrors Telegram's chat UX:
 Tech: vanilla HTML/CSS/JS + WebSocket. No build step. Served by the dev server.
 This is a development tool, not a product — keep it simple.
 
+### Package manager: pnpm
+
+This project uses pnpm exclusively. Do not use npm or yarn.
+
 ### Running locally
 
 ```bash
 # Install dependencies
-npm install
+pnpm install
 
 # Start dev server (local UI + SQLite)
-npm run dev
+pnpm dev
 
 # Run with Telegram polling (for testing the real adapter locally)
-npm run dev:telegram
+pnpm dev:telegram
 
 # Run sims
-npm run sim -- sims/
+pnpm run sim -- sims/
 ```
 
 ### Environment
@@ -1326,7 +1371,7 @@ tavern/
 │   │       └── ...
 │   │
 │   ├── srd/
-│   │   ├── loader.ts          # Load + index SRD data
+│   │   ├── loader.ts          # Load SRD data (KV in prod, local import in dev)
 │   │   ├── lookup.ts          # Query interface for model + commands
 │   │   ├── classes/           # JSON per class
 │   │   ├── races/             # JSON per race
@@ -1394,7 +1439,7 @@ tavern/
 Smallest shippable steps. Each step produces something testable.
 
 ### Phase 1: Foundation
-1. **Project scaffolding** — package.json, tsconfig, wrangler.toml, CLAUDE.md
+1. **Project scaffolding** — package.json (pnpm), tsconfig, wrangler.toml, CLAUDE.md
 2. **Resolver module + tests** — `dice.ts`, `skills.ts`. Pure functions, no dependencies. Port `roll.py` logic to TS with `crypto.getRandomValues()`. Table-driven tests.
 3. **State layer** — SQLite schema, migrations, CRUD store. Local SQLite via `better-sqlite3`.
 4. **SRD data** — Import a subset of the 5e SRD. Start with one class (Monk), one race (Tiefling), core rules. Expand later.
@@ -1418,10 +1463,10 @@ Smallest shippable steps. Each step produces something testable.
 16. **Local dev UI** — the Telegram-clone web interface for development.
 
 ### Phase 5: Deploy
-17. **Worker entry point** — wire gateway to Cloudflare Worker fetch handler.
+17. **Worker + Durable Object** — thin Worker webhook receiver + GameSession DO that runs the full engine. All game logic lives in the DO.
 18. **D1 migration** — ensure schema works on D1, test reads/writes.
-19. **Durable Object** — long-running turn escalation for complex combat.
-20. **Production deploy** — wrangler publish, set secrets, register webhook.
+19. **KV SRD upload** — setup script to populate KV with SRD JSON. DO caches on first read.
+20. **Production deploy** — `wrangler deploy`, set secrets, register Telegram webhook.
 
 ### Phase 6: Polish
 21. **Sim runner** — sim adapter + YAML definitions + assertion engine.
