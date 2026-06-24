@@ -14,16 +14,11 @@ export const config = {
 
   /** Available models for the /model picker */
   availableModels: [
-    { id: "xiaomi/mimo-v2.5", label: "MiMo v2.5", tier: "fast" },
-    { id: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4", tier: "quality" },
-    { id: "anthropic/claude-haiku-4", label: "Claude Haiku 4", tier: "fast" },
-    { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash", tier: "fast" },
-    { id: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro", tier: "quality" },
-    { id: "qwen/qwen3-235b", label: "Qwen3 235B", tier: "quality" },
-    { id: "qwen/qwen3-32b", label: "Qwen3 32B", tier: "fast" },
-    { id: "meta-llama/llama-4-maverick", label: "Llama 4 Maverick", tier: "quality" },
-    { id: "meta-llama/llama-4-scout", label: "Llama 4 Scout", tier: "fast" },
-    { id: "mistralai/mistral-large-2", label: "Mistral Large 2", tier: "quality" },
+    { id: "xiaomi/mimo-v2.5", label: "MiMo v2.5", tier: "default" },
+    { id: "xiaomi/mimo-v2.5-pro", label: "MiMo v2.5 Pro", tier: "quality" },
+    { id: "deepseek/deepseek-v4-flash", label: "DeepSeek V4 Flash", tier: "cheap" },
+    { id: "deepseek/deepseek-v4-pro", label: "DeepSeek V4 Pro", tier: "quality" },
+    { id: "qwen/qwen3-235b-a22b-2507", label: "Qwen3 235B MoE", tier: "ultra-cheap" },
   ] as const,
 
   /** STT model for voice memos */
