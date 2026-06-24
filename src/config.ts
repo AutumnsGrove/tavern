@@ -22,7 +22,7 @@ export const config = {
   ] as const,
 
   /** STT model for voice memos */
-  sttModel: "openai/whisper-1",
+  sttModel: "nvidia/parakeet-tdt-0.6b-v3",
 
   // ── Narrator ────────────────────────────────────────────────
 

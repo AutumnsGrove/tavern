@@ -67,31 +67,33 @@
 ## Telegram Adapter
 
 ### Webhook Setup
-- [ ] Wire GameSession DO to parse Telegram webhook payloads
-- [ ] Send narrative responses via Telegram Bot API
-- [ ] Register webhook URL with Telegram (`setWebhook`)
+- [x] Telegram Bot API client (typed fetch wrapper, all endpoints)
+- [x] Parse Telegram Update → InboundMsg (text, callback_query, voice)
+- [x] Wire GameSession DO to parse Telegram webhook payloads
+- [x] Send narrative responses via Telegram Bot API
+- [x] Register webhook URL with Telegram (`/register-webhook` endpoint)
+- [ ] Command buttons for common actions (persistent keyboard)
 
 ### Inline Keyboards
-- [ ] Render forks as inline keyboard buttons
-- [ ] Handle callback_query for button taps
-- [ ] Always append "Other" button that prompts free text
-- [ ] Command buttons for common actions
+- [x] Render forks as inline keyboard buttons
+- [x] Handle callback_query for button taps
+- [x] Always append "Other" button that prompts free text
 
 ### Trace Messages
-- [ ] Send trace as a separate message above narrative
-- [ ] Edit trace in-place as tool calls resolve (roll results appear live)
-- [ ] Respect /traces toggle
+- [x] Send trace as a separate message above narrative
+- [x] Edit trace in-place (update existing message)
+- [x] Respect /traces toggle
 
 ### Voice Memos
-- [ ] Download OGG/Opus from Telegram file API
-- [ ] Send to STT model on OpenRouter (Parakeet/Whisper)
-- [ ] Inject transcript as player text input
-- [ ] Show transcript in trace: 🎤 Voice: "{text}"
+- [x] Download OGG/Opus from Telegram file API
+- [x] Send to STT model on OpenRouter (Parakeet)
+- [x] Inject transcript as player text input
+- [x] Show transcript in trace: 🎤 Voice: "{text}"
 
 ### Message Handling
-- [ ] Paginate long narratives (Telegram 4096 char limit)
-- [ ] Typing indicator while narrator thinks
-- [ ] Error messages for API failures
+- [x] Paginate long narratives (Telegram 4096 char limit)
+- [x] Typing indicator while narrator thinks (re-sends every 4s)
+- [x] Error messages for API failures
 
 ## Local Dev UI (Telegram Clone)
 

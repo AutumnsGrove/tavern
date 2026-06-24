@@ -16,9 +16,28 @@ export default {
       return new Response("ok");
     }
 
+    // Webhook registration endpoint
+    if (url.pathname === "/register-webhook" && request.method === "POST") {
+      const { TelegramApi } = await import("./telegram/api");
+      const api = new TelegramApi(env.TELEGRAM_BOT_TOKEN);
+      const webhookUrl = `${url.origin}/webhook`;
+      await api.setWebhook(webhookUrl);
+      return new Response(JSON.stringify({ ok: true, webhook: webhookUrl }), {
+        headers: { "content-type": "application/json" },
+      });
+    }
+
     if (url.pathname === "/webhook" && request.method === "POST") {
-      const body = await request.json<{ message?: { chat?: { id: number } } }>();
-      const chatId = body?.message?.chat?.id;
+      const body = await request.json<{
+        message?: { chat?: { id: number } };
+        callback_query?: { message?: { chat?: { id: number } } };
+      }>();
+
+      // Extract chat_id from either message or callback_query
+      const chatId =
+        body?.message?.chat?.id ??
+        body?.callback_query?.message?.chat?.id;
+
       if (!chatId) {
         return new Response("no chat_id", { status: 400 });
       }
