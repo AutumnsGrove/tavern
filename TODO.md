@@ -68,8 +68,8 @@
 - [x] Crit/fumble handling, damage doubling on crits
 - [x] Turn advancement (advanceTurn)
 - [x] damageEnemy + allEnemiesDown helpers
-- [ ] Death saving throws for player character
-- [ ] /abilities shows combat-contextual action menu during fights
+- [x] Death saving throws (auto-roll at 0 HP, nat 20 revive, nat 1 double fail, damage-at-0 failures)
+- [x] /abilities: class-agnostic combat action menu (weapons, resources, class specials, reactions)
 
 ### Compaction
 - [x] Scene-based compaction: end_scene triggers message trimming

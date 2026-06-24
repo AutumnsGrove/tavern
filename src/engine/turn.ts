@@ -27,6 +27,8 @@ import {
 import { spendResource, getResourceLabel } from "../resolver/resources";
 import type { ResourceMap } from "../resolver/resources";
 import { startCombat, resolveEnemyAttack, advanceTurn, damageEnemy, allEnemiesDown } from "../combat/engine";
+import { rollDeathSave, makeDeathSaveState, damageAtZeroHp, healFromZero } from "../combat/death-saves";
+import type { DeathSaveState } from "../combat/death-saves";
 import type { Ability, CharacterScores, ModifierLookupParams } from "../resolver/skills";
 import { renderCharacterSheet, renderWorldState } from "../state/documents";
 import { TraceBoard } from "../trace/board";
@@ -88,6 +90,57 @@ export async function handleTurn(deps: TurnDeps, input: TurnInput): Promise<Turn
     combatState = `Round ${combat.round}. Turn: ${order[combat.current_turn]?.name ?? "unknown"}.\n`;
     combatState += `Initiative: ${order.map((e, i) => `${i === combat.current_turn ? "→ " : ""}${e.name} (${e.total})`).join(", ")}\n`;
     combatState += `Enemies: ${enemies.map((e) => `${e.name} ${e.hp_current}/${e.hp_max} HP, AC ${e.ac}`).join("; ")}`;
+
+    // Death saves: auto-roll if player is at 0 HP
+    if (character && character.hp_current <= 0) {
+      const deathSaveJson = await store.getFlag(saveId, "_death_saves");
+      const deathState: DeathSaveState = deathSaveJson
+        ? JSON.parse(deathSaveJson)
+        : makeDeathSaveState();
+
+      if (!deathState.stable && !deathState.dead) {
+        const result = rollDeathSave(deathState);
+
+        await store.addRoll(saveId, {
+          checkType: "death_save",
+          notation: "1d20",
+          nat: result.nat,
+          total: result.nat,
+          dc: 10,
+          success: result.nat >= 10,
+          crit: result.nat === 20,
+          fumble: result.nat === 1,
+          reason: "Death saving throw",
+        });
+
+        if (result.revived) {
+          // Nat 20: regain 1 HP
+          await store.updateCharacter(saveId, { hp_current: 1 });
+          character.hp_current = 1;
+          await store.deleteFlag(saveId, "_death_saves");
+          trace.add("combat", `💀 Death save: **NAT 20!** ${character.name} regains 1 HP!`);
+          combatState += `\n\n⚡ ${character.name} rolled a NAT 20 on their death save and regains consciousness with 1 HP!`;
+        } else if (result.dead) {
+          await store.setFlag(saveId, "_death_saves", JSON.stringify(result));
+          trace.add("combat", `💀 Death save: nat ${result.nat} — FAILED (${result.failures}/3). ${character.name} has died.`);
+          combatState += `\n\n💀 ${character.name} has failed 3 death saves and is DEAD.`;
+        } else if (result.stable) {
+          await store.setFlag(saveId, "_death_saves", JSON.stringify(result));
+          trace.add("combat", `💀 Death save: nat ${result.nat} — SUCCESS (${result.successes}/3). ${character.name} is stable.`);
+          combatState += `\n\n🛡️ ${character.name} has stabilized (3 successful death saves). Still unconscious at 0 HP.`;
+        } else {
+          await store.setFlag(saveId, "_death_saves", JSON.stringify(result));
+          const icon = result.nat >= 10 ? "✅" : "❌";
+          const failNote = result.nat === 1 ? " (nat 1 = 2 failures!)" : "";
+          trace.add("combat", `💀 Death save: nat ${result.nat} ${icon} — ${result.successes}/3 success, ${result.failures}/3 fail${failNote}`);
+          combatState += `\n\nDeath saves: ${result.successes}/3 ✅ ${result.failures}/3 ❌. ${character.name} is unconscious.`;
+        }
+      } else if (deathState.stable) {
+        combatState += `\n\n🛡️ ${character.name} is stable but unconscious at 0 HP.`;
+      } else if (deathState.dead) {
+        combatState += `\n\n💀 ${character.name} is dead.`;
+      }
+    }
   }
 
   // Token-based auto-compaction before building context
@@ -326,10 +379,18 @@ function buildToolHandlers(
       const patch: Record<string, unknown> = {};
 
       if (args.hp_change !== undefined) {
-        const newHp = Math.max(0, Math.min(character.hp_max, character.hp_current + (args.hp_change as number)));
+        const hpChange = args.hp_change as number;
+        const wasAtZero = character.hp_current <= 0;
+        const newHp = Math.max(0, Math.min(character.hp_max, character.hp_current + hpChange));
         patch.hp_current = newHp;
         trace.add("state", `📊 HP: ${character.hp_current} → ${newHp}/${character.hp_max}`);
         character.hp_current = newHp;
+
+        // Healing from 0 HP resets death saves
+        if (wasAtZero && newHp > 0) {
+          await store.deleteFlag(saveId, "_death_saves");
+          trace.add("combat", `💀 Death saves reset — ${character.name} regains consciousness`);
+        }
       }
 
       if (args.ki_change !== undefined && character.ki_current !== null && character.ki_max !== null) {
@@ -507,6 +568,7 @@ function buildToolHandlers(
 
     async end_combat(args) {
       await store.endCombat(saveId);
+      await store.deleteFlag(saveId, "_death_saves");
       trace.add("combat", `⚔️ Combat ended: ${args.reason}`);
       return { ok: true };
     },
@@ -555,11 +617,44 @@ function buildToolHandlers(
       );
 
       if (result.hit && result.damage) {
+        const wasAtZero = character.hp_current <= 0;
+
+        if (wasAtZero) {
+          // Damage at 0 HP = automatic death save failure
+          const deathSaveJson = await store.getFlag(saveId, "_death_saves");
+          const deathState: DeathSaveState = deathSaveJson
+            ? JSON.parse(deathSaveJson)
+            : makeDeathSaveState();
+          const updated = damageAtZeroHp(deathState, result.attackRoll.crit);
+          await store.setFlag(saveId, "_death_saves", JSON.stringify(updated));
+          const failCount = result.attackRoll.crit ? 2 : 1;
+          trace.add("combat", `💀 Damage at 0 HP: +${failCount} death save failure${failCount > 1 ? "s" : ""} (${updated.failures}/3)`);
+
+          return {
+            hit: true,
+            attack_total: result.attackRoll.total,
+            nat: result.attackRoll.nat,
+            crit: result.attackRoll.crit,
+            damage: result.damage.total,
+            target_hp: 0,
+            target_hp_max: character.hp_max,
+            unconscious: true,
+            death_save_failures: updated.failures,
+            dead: updated.dead,
+          };
+        }
+
         // Apply damage to player
         const newHp = Math.max(0, character.hp_current - result.damage.total);
         await store.updateCharacter(saveId, { hp_current: newHp });
         trace.add("state", `📊 HP: ${character.hp_current} → ${newHp}/${character.hp_max} (${result.damage.total} damage)`);
         character.hp_current = newHp;
+
+        // If dropped to 0, initialize death saves
+        if (newHp <= 0) {
+          await store.setFlag(saveId, "_death_saves", JSON.stringify(makeDeathSaveState()));
+          trace.add("combat", `💀 ${character.name} falls unconscious! Death saves begin.`);
+        }
 
         // Re-render character doc
         const updatedChar = await store.getCharacter(saveId);
