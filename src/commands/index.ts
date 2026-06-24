@@ -14,6 +14,7 @@ import { inventoryCommand } from "./inventory";
 import { worldCommand } from "./world";
 import { abilitiesCommand } from "./abilities";
 import { conciseCommand, verboseCommand, tracesCommand } from "./mode";
+import { newCommand } from "./new";
 
 export function registerCommands(
   registry: CommandRegistry,
@@ -22,6 +23,7 @@ export function registerCommands(
 ): void {
   registry.register(helpCommand);
   registry.register(rollCommand);
+  registry.register(newCommand(store, srd));
   registry.register(sheetCommand(store));
   registry.register(inventoryCommand(store));
   registry.register(worldCommand(store));

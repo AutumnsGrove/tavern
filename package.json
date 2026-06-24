@@ -12,11 +12,14 @@
     "test:watch": "vitest",
     "srd:seed": "tsx scripts/seed-srd.ts",
     "db:migrate": "wrangler d1 migrations apply tavern-db --local",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "play": "tsx src/cli/play.ts"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8.0",
     "@cloudflare/workers-types": "^4.20250620.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "^12.11.1",
     "tsx": "^4.22.4",
     "typescript": "^5.8.0",
     "vitest": "^3.2.0",
