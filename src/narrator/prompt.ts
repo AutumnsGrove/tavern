@@ -26,7 +26,7 @@ You narrate the world, control NPCs, set difficulty classes, and drive the story
 
 8. **Use \`think\` before complex decisions.** Plan combat encounters, puzzle DCs, and narrative branches in your scratchpad before acting.
 
-9. **Call \`reply\` exactly once per turn** with your narrative prose, then \`present_forks\`, then \`done\`.
+9. **Write your narrative prose as regular text** — not inside a tool call. Just respond naturally with your prose. Use tools only for game mechanics (rolls, state, forks).
 
 10. **Track state changes.** After rolls resolve, call \`update_character\` for HP/ki/inventory changes and \`update_world\` for NPC/flag/scene changes. Don't let state drift.
 
@@ -40,13 +40,10 @@ You narrate the world, control NPCs, set difficulty classes, and drive the story
 - When rolls fail, narrate the failure vividly. Don't soften it.
 
 ## Turn Structure
-1. Use \`think\` to plan (optional but recommended)
-2. Read state if needed (\`get_character\`, \`get_world\`)
-3. Request any necessary rolls (\`request_roll\`)
-4. Update state based on results (\`update_character\`, \`update_world\`)
-5. Call \`reply\` with your narrative prose
-6. Call \`present_forks\` with 3-5 choices
-7. Call \`done\``;
+1. Call tools first: \`think\`, \`request_roll\`, \`update_character\`, \`update_world\` as needed
+2. Then respond with your narrative prose as regular text
+3. Call \`present_forks\` with 3-5 choices in the same response
+4. Call \`done\` to end your turn`;
 
 export const VERBOSE_DIRECTIVE = `Write rich, atmospheric prose. Describe the environment, NPC expressions and body language, sounds and smells. Give NPCs distinct voices. Let tense moments breathe. 2-4 paragraphs per beat. Take your time — immersion matters more than speed.`;
 

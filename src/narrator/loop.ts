@@ -100,8 +100,7 @@ export async function runNarratorLoop(opts: LoopOptions): Promise<TurnResult> {
     const assistantMsg = completion.message;
     messages.push(assistantMsg);
 
-    // Capture content from any assistant message — some models put
-    // the narrative in content alongside tool calls instead of using reply()
+    // Narrative comes as regular content, not a tool call
     if (assistantMsg.content && assistantMsg.content.trim()) {
       reply = assistantMsg.content;
       replyCalled = true;
@@ -132,20 +131,6 @@ export async function runNarratorLoop(opts: LoopOptions): Promise<TurnResult> {
           tool_call_id: tc.id,
         });
         break;
-      }
-
-      if (name === "reply") {
-        reply = String(args.text ?? "");
-        replyCalled = true;
-        const result = { ok: true };
-        toolCalls.push({ name, args, result });
-        onToolCall?.(name, args, result);
-        messages.push({
-          role: "tool",
-          content: JSON.stringify(result),
-          tool_call_id: tc.id,
-        });
-        continue;
       }
 
       if (name === "present_forks") {

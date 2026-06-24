@@ -12,6 +12,12 @@ function makeClient(responses: CompletionResult[]): NarratorClient {
       callIndex++;
       return response;
     }),
+    chatStream: vi.fn(async () => {
+      const response = responses[callIndex];
+      if (!response) throw new Error("unexpected call to client.chatStream");
+      callIndex++;
+      return response;
+    }),
     setModel: vi.fn(),
     getModel: vi.fn(() => "test-model"),
   } as unknown as NarratorClient;
@@ -29,16 +35,15 @@ function makeResult(message: ChatMessage, finishReason = "stop"): CompletionResu
 const emptyTools: ToolDef[] = [];
 
 describe("runNarratorLoop", () => {
-  it("handles a simple reply + done turn", async () => {
+  it("handles content + forks + done turn", async () => {
     const client = makeClient([
-      // Model calls reply, present_forks, done
+      // Model writes prose in content, calls forks + done as tools
       makeResult({
         role: "assistant",
-        content: null,
+        content: "You enter the tavern.",
         tool_calls: [
-          { id: "tc1", type: "function", function: { name: "reply", arguments: '{"text":"You enter the tavern."}' } },
-          { id: "tc2", type: "function", function: { name: "present_forks", arguments: '{"forks":[{"label":"Talk to barkeep","detail":"Approach the bar"},{"label":"Sit in corner","detail":"Find a dark corner"},{"label":"Check exits","detail":"Look for exits"}]}' } },
-          { id: "tc3", type: "function", function: { name: "done", arguments: "{}" } },
+          { id: "tc1", type: "function", function: { name: "present_forks", arguments: '{"forks":[{"label":"Talk to barkeep","detail":"Approach the bar"},{"label":"Sit in corner","detail":"Find a dark corner"},{"label":"Check exits","detail":"Look for exits"}]}' } },
+          { id: "tc2", type: "function", function: { name: "done", arguments: "{}" } },
         ],
       }),
     ]);
@@ -71,14 +76,13 @@ describe("runNarratorLoop", () => {
           { id: "tc1", type: "function", function: { name: "request_roll", arguments: '{"type":"check","skill":"stealth","dc":15,"reason":"sneak past guard"}' } },
         ],
       }),
-      // Iteration 2: model calls reply + done
+      // Iteration 2: model writes prose + forks + done
       makeResult({
         role: "assistant",
-        content: null,
+        content: "You slip past the guard unseen.",
         tool_calls: [
-          { id: "tc2", type: "function", function: { name: "reply", arguments: '{"text":"You slip past the guard unseen."}' } },
-          { id: "tc3", type: "function", function: { name: "present_forks", arguments: '{"forks":[{"label":"A","detail":"a"},{"label":"B","detail":"b"},{"label":"C","detail":"c"}]}' } },
-          { id: "tc4", type: "function", function: { name: "done", arguments: "{}" } },
+          { id: "tc2", type: "function", function: { name: "present_forks", arguments: '{"forks":[{"label":"A","detail":"a"},{"label":"B","detail":"b"},{"label":"C","detail":"c"}]}' } },
+          { id: "tc3", type: "function", function: { name: "done", arguments: "{}" } },
         ],
       }),
     ]);
@@ -95,7 +99,7 @@ describe("runNarratorLoop", () => {
       expect.objectContaining({ type: "check", skill: "stealth", dc: 15 }),
     );
     expect(result.reply).toBe("You slip past the guard unseen.");
-    expect(result.toolCalls).toHaveLength(3); // request_roll, reply, forks (done breaks loop before recording)
+    expect(result.toolCalls).toHaveLength(2); // request_roll, forks (done breaks loop)
   });
 
   it("handles model responding with text content instead of tool calls", async () => {
@@ -123,12 +127,11 @@ describe("runNarratorLoop", () => {
     const client = makeClient([
       makeResult({
         role: "assistant",
-        content: null,
+        content: "You step into darkness.",
         tool_calls: [
           { id: "tc1", type: "function", function: { name: "think", arguments: '{"text":"The player is entering a dangerous area..."}' } },
-          { id: "tc2", type: "function", function: { name: "reply", arguments: '{"text":"You step into darkness."}' } },
-          { id: "tc3", type: "function", function: { name: "present_forks", arguments: '{"forks":[{"label":"A","detail":"a"},{"label":"B","detail":"b"},{"label":"C","detail":"c"}]}' } },
-          { id: "tc4", type: "function", function: { name: "done", arguments: "{}" } },
+          { id: "tc2", type: "function", function: { name: "present_forks", arguments: '{"forks":[{"label":"A","detail":"a"},{"label":"B","detail":"b"},{"label":"C","detail":"c"}]}' } },
+          { id: "tc3", type: "function", function: { name: "done", arguments: "{}" } },
         ],
       }),
     ]);
@@ -148,7 +151,6 @@ describe("runNarratorLoop", () => {
   });
 
   it("reports error when max iterations reached", async () => {
-    // Model just keeps calling think forever
     const thinkResponse = makeResult({
       role: "assistant",
       content: null,
@@ -201,13 +203,12 @@ describe("runNarratorLoop", () => {
           { id: "tc1", type: "function", function: { name: "request_roll", arguments: '{"type":"check","reason":"test"}' } },
         ],
       }),
-      // After error, model replies anyway
+      // After error, model writes prose + done
       makeResult({
         role: "assistant",
-        content: null,
+        content: "Something went wrong in the world...",
         tool_calls: [
-          { id: "tc2", type: "function", function: { name: "reply", arguments: '{"text":"Something went wrong in the world..."}' } },
-          { id: "tc3", type: "function", function: { name: "done", arguments: "{}" } },
+          { id: "tc2", type: "function", function: { name: "done", arguments: "{}" } },
         ],
       }),
     ]);
@@ -219,7 +220,6 @@ describe("runNarratorLoop", () => {
       messages: [{ role: "user", content: "test" }],
     });
 
-    // The loop should continue even if a handler fails
     const rollCall = result.toolCalls.find((tc) => tc.name === "request_roll");
     expect(rollCall!.result).toEqual({ error: "database connection failed" });
     expect(result.reply).toBe("Something went wrong in the world...");
@@ -236,10 +236,9 @@ describe("runNarratorLoop", () => {
       }),
       makeResult({
         role: "assistant",
-        content: null,
+        content: "Done.",
         tool_calls: [
-          { id: "tc2", type: "function", function: { name: "reply", arguments: '{"text":"Done."}' } },
-          { id: "tc3", type: "function", function: { name: "done", arguments: "{}" } },
+          { id: "tc2", type: "function", function: { name: "done", arguments: "{}" } },
         ],
       }),
     ]);
