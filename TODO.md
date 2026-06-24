@@ -49,14 +49,18 @@
 - [x] Legacy backwards compat for existing saves without resources
 
 ### Interactive Onboarding (/new revamp)
-- [ ] Step-by-step character creation flow with inline keyboards
-- [ ] Race selection: show racial traits from SRD on pick
-- [ ] Class selection: show class summary from SRD on pick
-- [ ] Stat rolling: display 4d6-drop-lowest results, assign via keyboard
-- [ ] Level selection: engine fills HP, features, resources from SRD
-- [ ] Subclass selection (if level ≥ 3): options from SRD
-- [ ] Skill proficiency selection: multi-pick from class skill list
-- [ ] Equipment selection: starting gear from SRD class entry
+- [x] Step-by-step flow controller with state machine
+- [x] Race selection: 9 SRD races with ability bonuses + traits
+- [x] Class selection: 12 SRD classes with hit die + saves
+- [x] Stat rolling: 4d6-drop-lowest with smart assignment + reroll option
+- [x] Level selection: 1/3/5/10 presets or custom 1-20
+- [x] Subclass selection (auto-picked from SRD if only one)
+- [x] Skill proficiency multi-pick from class skill list
+- [x] Name entry with random name option
+- [x] Racial ability bonuses applied to final scores
+- [x] Quick mode preserved (/new Name Class Race Level)
+- [x] Works with both CLI (numbers) and Telegram (inline keyboards)
+- [ ] Equipment selection: starting gear choices from SRD class entry
 - [ ] Backstory: LLM asks 1-2 questions, generates personality + opening scene
 
 ### Combat System
