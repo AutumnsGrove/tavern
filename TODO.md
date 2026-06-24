@@ -26,18 +26,27 @@
 ## Up Next — Make It Real
 
 ### Trace Board
-- [ ] Port her-go trace system: named slots with render ordering
-- [ ] Trace slots: rolls, state changes, flags, npcs, combat, meta
-- [ ] Wire trace board into turn handler (replace plain traceLines array)
-- [ ] Telegram trace rendering (edit-in-place message above narrative)
+- [x] Port her-go trace system: named slots with render ordering
+- [x] Trace slots: rolls, state changes, flags, npcs, combat, meta
+- [x] Wire trace board into turn handler (replace plain traceLines array)
+- [x] Telegram trace rendering (edit-in-place message above narrative)
 
 ### /model Command
-- [ ] /model shows inline keyboard (or numbered list in CLI) of available models from config
-- [ ] Selection updates settings table and takes effect next turn
+- [x] /model shows numbered list of available models from config (with ◀ marker)
+- [x] Selection by number or fuzzy name match, updates settings table
 
 ### /undo Command
-- [ ] Snapshot state before each turn (character, inventory, flags, npcs)
-- [ ] /undo reverts to pre-turn snapshot and deletes last message pair
+- [x] Snapshot state before each turn (character, inventory, flags, resources)
+- [x] /undo reverts to pre-turn snapshot and deletes last message pair
+
+### Class Resources (all classes, not just ki)
+- [x] Generic resource system: ResourceMap with current/max/restoresOn
+- [x] Build resources from SRD Levels data (ki, rage, sorcery points, spell slots, action surge, channel divinity, etc.)
+- [x] /new populates class_resources_json from SRD on character creation
+- [x] update_character tool: spend_resource action with engine validation
+- [x] Character sheet renders all resources with short/long rest labels
+- [x] /rest command: short or long rest restores appropriate resources
+- [x] Legacy backwards compat for existing saves without resources
 
 ### Interactive Onboarding (/new revamp)
 - [ ] Step-by-step character creation flow with inline keyboards
@@ -51,18 +60,22 @@
 - [ ] Backstory: LLM asks 1-2 questions, generates personality + opening scene
 
 ### Combat System
-- [ ] Combat state machine (exploration → initiative → turns → end)
-- [ ] start_combat tool: SRD bestiary lookup for enemy stat blocks
-- [ ] Initiative rolling and turn order tracking
-- [ ] enemy_action tool: resolve enemy attacks/abilities via resolver
-- [ ] HP tracking for enemies (stored in combat table)
-- [ ] Death/unconsciousness rules from SRD
+- [x] Combat engine: SRD bestiary lookup for enemy stat blocks
+- [x] start_combat tool: expand enemy counts, roll initiative, store state
+- [x] Initiative rolling and turn order tracking
+- [x] enemy_action tool: resolve enemy attacks via resolver, apply damage
+- [x] HP tracking for enemies (stored in combat table as JSON)
+- [x] Crit/fumble handling, damage doubling on crits
+- [x] Turn advancement (advanceTurn)
+- [x] damageEnemy + allEnemiesDown helpers
+- [ ] Death saving throws for player character
 - [ ] /abilities shows combat-contextual action menu during fights
 
 ### Compaction
-- [ ] Scene-based compaction: end_scene stores summary, trims old messages
-- [ ] Token-based compaction: auto-trim when hot context approaches budget
-- [ ] /reset command: clear hot context, keep documents and scenes
+- [x] Scene-based compaction: end_scene triggers message trimming
+- [x] Token-based compaction: auto-trim when hot context exceeds budget
+- [x] /reset command: clear hot context, keep documents and scenes
+- [x] Configurable token budget and keep-messages count
 
 ## Telegram Adapter
 
@@ -109,7 +122,7 @@
 
 ## Cloudflare Deploy
 
-- [ ] Wire GameSession DO with full engine (currently a stub)
+- [x] Wire GameSession DO with full engine (commands + narrator + adapter)
 - [ ] D1 migration on first request
 - [ ] KV SRD seed script for production
 - [ ] `wrangler deploy` + `wrangler secret put`

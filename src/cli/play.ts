@@ -105,6 +105,15 @@ async function main() {
   );
   await db.exec(migrationSql);
 
+  // Run migration 002 (safe to re-run: ALTER TABLE fails silently if column exists)
+  try {
+    const migration002 = readFileSync(
+      join(import.meta.dirname, "../state/migrations/002_class_resources.sql"),
+      "utf-8",
+    );
+    await db.exec(migration002);
+  } catch { /* column already exists */ }
+
   const store = new GameStore(db);
   const srd = new SrdLoader(kv);
 

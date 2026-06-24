@@ -16,6 +16,7 @@ import type { SrdLoader } from "../srd/loader";
 import { rollAbilityScores } from "../resolver/dice";
 import { abilityModifier, proficiencyBonus } from "../resolver/skills";
 import { renderCharacterSheet } from "../state/documents";
+import { buildResourceMap } from "../resolver/resources";
 import { config } from "../config";
 
 export function newCommand(store: GameStore, srd: SrdLoader): CommandDef {
@@ -128,6 +129,9 @@ export function newCommand(store: GameStore, srd: SrdLoader): CommandDef {
       };
       const skillProfs = classSkills[className.toLowerCase()] ?? ["athletics", "perception"];
 
+      // Build class resources from SRD
+      const classResources = await buildResourceMap(srd, className, level);
+
       // Create save
       const saveId = crypto.randomUUID();
       await store.createSave(saveId, ctx.chatId, `${name}'s Adventure`);
@@ -153,6 +157,7 @@ export function newCommand(store: GameStore, srd: SrdLoader): CommandDef {
         hit_dice_remaining: level,
         skill_proficiencies: JSON.stringify(skillProfs),
         save_proficiencies: JSON.stringify(saveProficiencies),
+        class_resources_json: JSON.stringify(classResources),
         tool_proficiencies: "[]",
       });
 

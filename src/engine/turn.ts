@@ -24,8 +24,14 @@ import {
   abilityModifier,
   proficiencyBonus,
 } from "../resolver/skills";
+import { spendResource, getResourceLabel } from "../resolver/resources";
+import type { ResourceMap } from "../resolver/resources";
+import { startCombat, resolveEnemyAttack, advanceTurn, damageEnemy, allEnemiesDown } from "../combat/engine";
 import type { Ability, CharacterScores, ModifierLookupParams } from "../resolver/skills";
 import { renderCharacterSheet, renderWorldState } from "../state/documents";
+import { TraceBoard } from "../trace/board";
+import { setSnapshot } from "../commands/undo";
+import { compactIfNeeded, compactOnSceneEnd } from "./compaction";
 
 export interface TurnDeps {
   store: GameStore;
@@ -45,6 +51,7 @@ export interface TurnOutput {
   reply: string;
   forks: Fork[];
   traceLines: string[];
+  traceBoard: TraceBoard;
   tokensIn: number;
   tokensOut: number;
   model: string;
@@ -55,7 +62,7 @@ export async function handleTurn(deps: TurnDeps, input: TurnInput): Promise<Turn
   const { store, srd, apiKey, model } = deps;
   const { chatId, saveId, text, narrationMode } = input;
 
-  const traceLines: string[] = [];
+  const trace = new TraceBoard();
 
   // Load current state
   const character = await store.getCharacter(saveId);
@@ -83,8 +90,8 @@ export async function handleTurn(deps: TurnDeps, input: TurnInput): Promise<Turn
     combatState += `Enemies: ${enemies.map((e) => `${e.name} ${e.hp_current}/${e.hp_max} HP, AC ${e.ac}`).join("; ")}`;
   }
 
-  // Convert stored messages to ChatMessage format
-  const chatHistory: ChatMessage[] = recentMessages.map((m) => {
+  // Token-based auto-compaction before building context
+  const chatHistoryRaw: ChatMessage[] = recentMessages.map((m) => {
     const msg: ChatMessage = { role: m.role as ChatMessage["role"], content: m.content };
     if (m.tool_calls_json) {
       msg.tool_calls = JSON.parse(m.tool_calls_json);
@@ -94,6 +101,20 @@ export async function handleTurn(deps: TurnDeps, input: TurnInput): Promise<Turn
     }
     return msg;
   });
+
+  const compactionResult = await compactIfNeeded(store, saveId, chatHistoryRaw);
+  let chatHistory = chatHistoryRaw;
+  if (compactionResult.trimmedCount > 0) {
+    // Re-fetch after compaction
+    const freshMessages = await store.getRecentMessages(saveId, config.hotContextMessages);
+    chatHistory = freshMessages.map((m) => {
+      const msg: ChatMessage = { role: m.role as ChatMessage["role"], content: m.content };
+      if (m.tool_calls_json) msg.tool_calls = JSON.parse(m.tool_calls_json);
+      if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
+      return msg;
+    });
+    trace.add("meta", `📎 Compacted ${compactionResult.trimmedCount} old messages (token budget)`);
+  }
 
   // Build context
   const messages = buildContext({
@@ -105,11 +126,31 @@ export async function handleTurn(deps: TurnDeps, input: TurnInput): Promise<Turn
     playerMessage: text,
   });
 
+  // Snapshot state for /undo before making changes
+  const messageCount = await store.getMessageCount(saveId);
+  const maxSeq = recentMessages.length > 0
+    ? (recentMessages[recentMessages.length - 1] as { seq?: number }).seq ?? messageCount
+    : messageCount;
+  if (character) {
+    setSnapshot({
+      character: {
+        hp_current: character.hp_current,
+        ki_current: character.ki_current,
+        ki_max: character.ki_max,
+        spell_slots_json: character.spell_slots_json,
+        class_resources_json: character.class_resources_json,
+      },
+      inventory: inventory.map((i) => ({ ...i })),
+      flags: flags.map((f) => ({ ...f })),
+      messageSeq: maxSeq,
+    });
+  }
+
   // Save the player's message
   await store.addMessage(saveId, { role: "user", content: text });
 
   // Build tool handlers
-  const handlers = buildToolHandlers(store, srd, saveId, character, traceLines);
+  const handlers = buildToolHandlers(store, srd, saveId, character, trace);
 
   // Run narrator loop
   const client = new NarratorClient({
@@ -125,17 +166,16 @@ export async function handleTurn(deps: TurnDeps, input: TurnInput): Promise<Turn
     messages,
     maxIterations: config.maxToolIterations,
     onToolCall: (name, args, resultData) => {
-      // Build trace lines for interesting tool calls
       if (name === "request_roll" || name === "request_damage") {
         const r = resultData as Record<string, unknown>;
         if (r.nat !== undefined) {
           const successIcon = r.success === true ? "✅" : r.success === false ? "❌" : "";
           const critLabel = r.crit ? " *** NAT 20 ***" : r.fumble ? " *** NAT 1 ***" : "";
-          traceLines.push(
+          trace.add("rolls",
             `🎲 ${r.reason}: nat ${r.nat} ${r.modifier !== undefined ? `+ ${r.modifier}` : ""} = ${r.total}${r.dc !== undefined ? ` vs DC ${r.dc} ${successIcon}` : ""}${critLabel}`
           );
         } else if (r.total !== undefined) {
-          traceLines.push(`🎲 ${r.reason}: ${r.rolls} + ${r.modifier} = ${r.total} damage`);
+          trace.add("rolls", `🎲 ${r.reason}: ${r.rolls} + ${r.modifier} = ${r.total} damage`);
         }
       }
     },
@@ -151,7 +191,7 @@ export async function handleTurn(deps: TurnDeps, input: TurnInput): Promise<Turn
   });
 
   // Add meta trace
-  traceLines.push(
+  trace.add("meta",
     `⏱ ${result.iterations} tool calls · ${result.totalTokensIn + result.totalTokensOut} tokens · ${result.model}`
   );
 
@@ -160,7 +200,8 @@ export async function handleTurn(deps: TurnDeps, input: TurnInput): Promise<Turn
   return {
     reply: result.reply,
     forks: result.forks,
-    traceLines,
+    traceLines: trace.toLines(),
+    traceBoard: trace,
     tokensIn: result.totalTokensIn,
     tokensOut: result.totalTokensOut,
     model: result.model,
@@ -174,7 +215,7 @@ function buildToolHandlers(
   srd: SrdLoader,
   saveId: string,
   character: Awaited<ReturnType<GameStore["getCharacter"]>>,
-  traceLines: string[],
+  trace: TraceBoard,
 ): Record<string, ToolHandler> {
   return {
     async request_roll(args) {
@@ -287,15 +328,30 @@ function buildToolHandlers(
       if (args.hp_change !== undefined) {
         const newHp = Math.max(0, Math.min(character.hp_max, character.hp_current + (args.hp_change as number)));
         patch.hp_current = newHp;
-        traceLines.push(`📊 HP: ${character.hp_current} → ${newHp}/${character.hp_max}`);
+        trace.add("state", `📊 HP: ${character.hp_current} → ${newHp}/${character.hp_max}`);
         character.hp_current = newHp;
       }
 
       if (args.ki_change !== undefined && character.ki_current !== null && character.ki_max !== null) {
         const newKi = Math.max(0, Math.min(character.ki_max, character.ki_current + (args.ki_change as number)));
         patch.ki_current = newKi;
-        traceLines.push(`📊 Ki: ${character.ki_current} → ${newKi}/${character.ki_max}`);
+        trace.add("state", `📊 Ki: ${character.ki_current} → ${newKi}/${character.ki_max}`);
         character.ki_current = newKi;
+      }
+
+      // Spend class resource
+      const spendRes = args.spend_resource as { key: string; amount?: number } | undefined;
+      if (spendRes) {
+        const resources: ResourceMap = JSON.parse(character.class_resources_json || "{}");
+        const amount = spendRes.amount ?? 1;
+        const success = spendResource(resources, spendRes.key, amount);
+        if (!success) {
+          return { error: `insufficient ${getResourceLabel(spendRes.key)} (need ${amount})` };
+        }
+        patch.class_resources_json = JSON.stringify(resources);
+        character.class_resources_json = JSON.stringify(resources);
+        const r = resources[spendRes.key]!;
+        trace.add("state", `📊 ${getResourceLabel(spendRes.key)}: ${r.current + amount} → ${r.current}/${r.max}`);
       }
 
       if (Object.keys(patch).length > 0) {
@@ -307,7 +363,7 @@ function buildToolHandlers(
       if (addItems) {
         for (const item of addItems) {
           await store.addItem(saveId, item);
-          traceLines.push(`📦 +${item.name}${item.qty && item.qty > 1 ? ` (x${item.qty})` : ""}`);
+          trace.add("state", `📦 +${item.name}${item.qty && item.qty > 1 ? ` (x${item.qty})` : ""}`);
         }
       }
 
@@ -319,7 +375,7 @@ function buildToolHandlers(
           const item = inventory.find((i) => i.name.toLowerCase() === name.toLowerCase());
           if (item) {
             await store.removeItem(item.id);
-            traceLines.push(`📦 -${item.name}`);
+            trace.add("state", `📦 -${item.name}`);
           }
         }
       }
@@ -341,7 +397,7 @@ function buildToolHandlers(
       if (setFlags) {
         for (const [key, value] of Object.entries(setFlags)) {
           await store.setFlag(saveId, key, value);
-          traceLines.push(`🏴 ${key} = ${value}`);
+          trace.add("flags", `🏴 ${key} = ${value}`);
         }
       }
 
@@ -350,7 +406,7 @@ function buildToolHandlers(
       if (removeFlags) {
         for (const key of removeFlags) {
           await store.deleteFlag(saveId, key);
-          traceLines.push(`🏴 -${key}`);
+          trace.add("flags", `🏴 -${key}`);
         }
       }
 
@@ -359,7 +415,7 @@ function buildToolHandlers(
       if (addNpcs) {
         for (const npc of addNpcs) {
           await store.addNpc(saveId, npc);
-          traceLines.push(`👥 +${npc.name}${npc.role ? ` (${npc.role})` : ""}`);
+          trace.add("npcs", `👥 +${npc.name}${npc.role ? ` (${npc.role})` : ""}`);
         }
       }
 
@@ -377,7 +433,7 @@ function buildToolHandlers(
             if (update.role !== undefined) patch.role = update.role;
             if (Object.keys(patch).length > 0) {
               await store.updateNpc(npc.id, patch);
-              traceLines.push(`👥 ${npc.name} updated`);
+              trace.add("npcs", `👥 ${npc.name} updated`);
             }
           }
         }
@@ -402,25 +458,137 @@ function buildToolHandlers(
     async end_scene(args) {
       const summary = args.summary as string;
       await store.addScene(saveId, summary);
-      traceLines.push(`📜 Scene ended: ${summary.slice(0, 60)}...`);
+      const sceneCompaction = await compactOnSceneEnd(store, saveId);
+      if (sceneCompaction.trimmedCount > 0) {
+        trace.add("meta", `📎 Scene compaction: trimmed ${sceneCompaction.trimmedCount} old messages`);
+      }
+      trace.add("meta", `📜 Scene ended: ${summary.slice(0, 60)}...`);
       return { ok: true };
     },
 
-    // Combat tools — stubs for now, full implementation in Phase 3
     async start_combat(args) {
-      traceLines.push(`⚔️ Combat started`);
-      return { ok: true, message: "combat system coming soon" };
+      if (!character) return { error: "no character" };
+      const rawEnemies = args.enemies as Array<{ name: string; count?: number }>;
+      if (!rawEnemies?.length) return { error: "no enemies specified" };
+
+      // Expand counts: [{name: "Goblin", count: 3}] → ["Goblin 1", "Goblin 2", "Goblin 3"]
+      const enemyNames: string[] = [];
+      for (const e of rawEnemies) {
+        const count = e.count ?? 1;
+        if (count === 1) {
+          enemyNames.push(e.name);
+        } else {
+          for (let i = 1; i <= count; i++) {
+            enemyNames.push(`${e.name} ${i}`);
+          }
+        }
+      }
+
+      const result = await startCombat(store, srd, saveId, character, enemyNames);
+
+      trace.add("combat", `⚔️ Combat started!`);
+      for (const c of result.initiativeOrder) {
+        trace.add("combat", `  ${c.isPlayer ? "→" : " "} ${c.name}: ${c.initiative}`);
+      }
+      for (const e of result.enemies) {
+        trace.add("combat", `  ${e.name}: ${e.hp_max} HP, AC ${e.ac}`);
+      }
+
+      return {
+        initiative_order: result.initiativeOrder,
+        enemies: result.enemies.map((e) => ({
+          name: e.name,
+          hp: e.hp_max,
+          ac: e.ac,
+          actions: e.actions.map((a) => a.name),
+        })),
+      };
     },
 
     async end_combat(args) {
       await store.endCombat(saveId);
-      traceLines.push(`⚔️ Combat ended: ${args.reason}`);
+      trace.add("combat", `⚔️ Combat ended: ${args.reason}`);
       return { ok: true };
     },
 
     async enemy_action(args) {
-      traceLines.push(`⚔️ ${args.enemy}: ${args.action} → ${args.target}`);
-      return { ok: true, message: "enemy action resolution coming soon" };
+      if (!character) return { error: "no character" };
+      const combat = await store.getCombat(saveId);
+      if (!combat) return { error: "not in combat" };
+
+      const enemies = JSON.parse(combat.enemies_json) as Array<{
+        name: string; hp_current: number; ac: number; attack_bonus: number;
+        damage_dice: string; damage_bonus: number; dex: number;
+        actions: Array<{ name: string; desc: string; attack_bonus?: number; damage_dice?: string; damage_bonus?: number }>;
+        conditions: string[];
+      }>;
+
+      const enemyName = args.enemy as string;
+      const actionName = args.action as string;
+      const enemy = enemies.find((e) => e.name.toLowerCase() === enemyName.toLowerCase());
+      if (!enemy) return { error: `enemy "${enemyName}" not found` };
+      if (enemy.hp_current <= 0) return { error: `${enemyName} is already down` };
+
+      const result = resolveEnemyAttack(
+        enemy as any,
+        actionName,
+        character.ac,
+      );
+
+      // Persist attack roll
+      await store.addRoll(saveId, {
+        checkType: "attack",
+        notation: "1d20",
+        modifier: result.attackRoll.total - result.attackRoll.nat,
+        dc: character.ac,
+        nat: result.attackRoll.nat,
+        total: result.attackRoll.total,
+        success: result.hit,
+        crit: result.attackRoll.crit,
+        fumble: result.attackRoll.fumble,
+        reason: `${enemy.name}: ${result.action.name}`,
+      });
+
+      const critLabel = result.attackRoll.crit ? " ***CRIT***" : result.attackRoll.fumble ? " ***FUMBLE***" : "";
+      trace.add("combat",
+        `⚔️ ${enemy.name} → ${result.action.name}: nat ${result.attackRoll.nat} + ${result.attackRoll.total - result.attackRoll.nat} = ${result.attackRoll.total} vs AC ${character.ac} ${result.hit ? "✅" : "❌"}${critLabel}`
+      );
+
+      if (result.hit && result.damage) {
+        // Apply damage to player
+        const newHp = Math.max(0, character.hp_current - result.damage.total);
+        await store.updateCharacter(saveId, { hp_current: newHp });
+        trace.add("state", `📊 HP: ${character.hp_current} → ${newHp}/${character.hp_max} (${result.damage.total} damage)`);
+        character.hp_current = newHp;
+
+        // Re-render character doc
+        const updatedChar = await store.getCharacter(saveId);
+        const updatedInv = await store.getInventory(saveId);
+        if (updatedChar) {
+          await store.setDocument(saveId, "character", renderCharacterSheet(updatedChar, updatedInv));
+        }
+
+        return {
+          hit: true,
+          attack_total: result.attackRoll.total,
+          nat: result.attackRoll.nat,
+          crit: result.attackRoll.crit,
+          damage: result.damage.total,
+          target_hp: newHp,
+          target_hp_max: character.hp_max,
+          unconscious: newHp <= 0,
+        };
+      }
+
+      // Advance turn
+      await advanceTurn(store, saveId);
+
+      return {
+        hit: false,
+        attack_total: result.attackRoll.total,
+        nat: result.attackRoll.nat,
+        fumble: result.attackRoll.fumble,
+      };
     },
   };
 }

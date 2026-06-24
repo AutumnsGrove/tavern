@@ -38,6 +38,12 @@ export const config = {
   /** Number of recent messages to include as hot context */
   hotContextMessages: 30,
 
+  /** Max token budget for context (triggers auto-compaction) */
+  contextTokenBudget: 12000,
+
+  /** Messages to keep after auto-compaction (most recent) */
+  compactionKeepMessages: 10,
+
   // ── Character Creation ──────────────────────────────────────
 
   /** Default level for /new when not specified */

@@ -37,6 +37,7 @@ export interface Character {
   ki_max: number | null;
   spell_slots_json: string | null;
   hit_dice_remaining: number | null;
+  class_resources_json: string;
   skill_proficiencies: string; // JSON array
   save_proficiencies: string;  // JSON array
   tool_proficiencies: string;  // JSON array
@@ -189,14 +190,16 @@ export class GameStore {
         str, dex, con, int, wis, cha,
         hp_current, hp_max, ac, speed, proficiency_bonus,
         ki_current, ki_max, spell_slots_json, hit_dice_remaining,
+        class_resources_json,
         skill_proficiencies, save_proficiencies, tool_proficiencies
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .bind(
         char.save_id, char.name, char.race, char.class, char.subclass,
         char.level, char.xp,
         char.str, char.dex, char.con, char.int, char.wis, char.cha,
         char.hp_current, char.hp_max, char.ac, char.speed, char.proficiency_bonus,
         char.ki_current, char.ki_max, char.spell_slots_json, char.hit_dice_remaining,
+        char.class_resources_json,
         char.skill_proficiencies, char.save_proficiencies, char.tool_proficiencies,
       )
       .run();
@@ -407,6 +410,13 @@ export class GameStore {
   async deleteMessagesAfterSeq(saveId: string, seq: number): Promise<void> {
     await this.db
       .prepare("DELETE FROM messages WHERE save_id = ? AND seq > ?")
+      .bind(saveId, seq)
+      .run();
+  }
+
+  async deleteMessagesBeforeSeq(saveId: string, seq: number): Promise<void> {
+    await this.db
+      .prepare("DELETE FROM messages WHERE save_id = ? AND seq < ?")
       .bind(saveId, seq)
       .run();
   }

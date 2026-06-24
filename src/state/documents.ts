@@ -9,6 +9,8 @@
 import { abilityModifier, proficiencyBonus, skillModifier, SKILL_TO_ABILITY } from "../resolver/skills";
 import type { Character, InventoryItem, Npc, Flag, Scene } from "./store";
 import type { Ability, ModifierLookupParams, CharacterScores } from "../resolver/skills";
+import { getResourceLabel } from "../resolver/resources";
+import type { ResourceMap } from "../resolver/resources";
 
 function sign(n: number): string {
   return n >= 0 ? `+${n}` : `${n}`;
@@ -64,18 +66,31 @@ export function renderCharacterSheet(
       return `${marker} ${a.toUpperCase()}: ${sign(base + bonus)}`;
     });
 
-  // Class resources
+  // Class resources from unified resource map
   const resourceLines: string[] = [];
-  if (char.ki_max !== null && char.ki_current !== null) {
-    resourceLines.push(`Ki: ${char.ki_current}/${char.ki_max}`);
-  }
-  if (char.spell_slots_json) {
+  if (char.class_resources_json) {
     try {
-      const slots = JSON.parse(char.spell_slots_json) as Record<string, number>;
-      for (const [level, count] of Object.entries(slots)) {
-        if (count > 0) resourceLines.push(`Spell Slots (${level}): ${count}`);
+      const resources = JSON.parse(char.class_resources_json) as ResourceMap;
+      for (const [key, r] of Object.entries(resources)) {
+        const label = getResourceLabel(key);
+        const rest = r.restoresOn === "short" ? "SR" : "LR";
+        resourceLines.push(`${label}: ${r.current}/${r.max} (${rest})`);
       }
     } catch { /* ignore malformed */ }
+  }
+  // Legacy ki/spell_slots for backwards compat with existing saves
+  if (resourceLines.length === 0) {
+    if (char.ki_max !== null && char.ki_current !== null) {
+      resourceLines.push(`Ki: ${char.ki_current}/${char.ki_max}`);
+    }
+    if (char.spell_slots_json) {
+      try {
+        const slots = JSON.parse(char.spell_slots_json) as Record<string, number>;
+        for (const [level, count] of Object.entries(slots)) {
+          if (count > 0) resourceLines.push(`Spell Slots (${level}): ${count}`);
+        }
+      } catch { /* ignore malformed */ }
+    }
   }
   if (char.hit_dice_remaining !== null) {
     resourceLines.push(`Hit Dice: ${char.hit_dice_remaining}d${8} remaining`);

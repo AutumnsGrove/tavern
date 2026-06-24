@@ -14,6 +14,7 @@ export const helpCommand: CommandDef = {
 /inventory — Quick inventory list
 /abilities — Class features & spells
 /roll N — Roll a dN (e.g. /roll 20)
+/rest — Short or long rest (/rest short, /rest long)
 
 **Narration**
 /recap — Story summary (uses tokens)

@@ -25,6 +25,7 @@ const sayola: Character = {
   ki_max: 10,
   spell_slots_json: null,
   hit_dice_remaining: 10,
+  class_resources_json: '{"ki_points":{"current":10,"max":10,"restoresOn":"short"}}',
   skill_proficiencies: '["stealth", "acrobatics", "insight", "athletics"]',
   save_proficiencies: '["str", "dex"]',
   tool_proficiencies: "[]",

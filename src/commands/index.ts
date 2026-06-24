@@ -15,6 +15,10 @@ import { worldCommand } from "./world";
 import { abilitiesCommand } from "./abilities";
 import { conciseCommand, verboseCommand, tracesCommand } from "./mode";
 import { newCommand } from "./new";
+import { modelCommand } from "./model";
+import { undoCommand } from "./undo";
+import { restCommand } from "./rest";
+import { resetCommand } from "./reset";
 
 export function registerCommands(
   registry: CommandRegistry,
@@ -31,4 +35,8 @@ export function registerCommands(
   registry.register(conciseCommand(store));
   registry.register(verboseCommand(store));
   registry.register(tracesCommand(store));
+  registry.register(modelCommand(store));
+  registry.register(undoCommand(store));
+  registry.register(restCommand(store));
+  registry.register(resetCommand(store));
 }
