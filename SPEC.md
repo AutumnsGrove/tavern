@@ -1272,17 +1272,23 @@ Telegram bot token likewise.
 
 ## 20. Local Development
 
-### Dev server
+### One runtime: Miniflare via `wrangler dev`
 
-A Node.js server that runs the same engine code as the Worker, with:
-- SQLite on disk (`tavern.db`)
-- Local dev UI on `http://localhost:3000`
-- Hot reload on code changes
-- Same SRD bundle (imported from disk)
+There is no separate local dev server. `wrangler dev` runs Miniflare, which
+emulates the full Cloudflare runtime locally: Workers, Durable Objects, D1,
+KV, R2 — everything. The code that runs locally is the same code that runs
+in production. No `better-sqlite3`, no conditional imports, no "if local" branches.
+
+This means:
+- D1 works locally (Miniflare provides a local SQLite-backed D1)
+- KV works locally (Miniflare provides a local KV store)
+- Durable Objects work locally (same lifecycle, same API)
+- The SRD loader reads from KV everywhere — no local-mode fallback needed
 
 ### Local dev UI
 
-A single-page web app that mirrors Telegram's chat UX:
+A single-page web app that mirrors Telegram's chat UX, served by the Worker
+itself on a `/dev` route (only in dev mode):
 
 - Left-aligned narrator messages (markdown rendered)
 - Right-aligned player messages
@@ -1293,8 +1299,9 @@ A single-page web app that mirrors Telegram's chat UX:
 - Character sheet slide-out panel
 - Dark theme (it's a tavern)
 
-Tech: vanilla HTML/CSS/JS + WebSocket. No build step. Served by the dev server.
-This is a development tool, not a product — keep it simple.
+Tech: vanilla HTML/CSS/JS + WebSocket. No build step. The Worker serves
+static files from `src/adapters/local/ui/` in dev mode. The local adapter
+connects to the same GameSession DO — identical code path as Telegram.
 
 ### Package manager: pnpm
 
@@ -1306,10 +1313,15 @@ This project uses pnpm exclusively. Do not use npm or yarn.
 # Install dependencies
 pnpm install
 
-# Start dev server (local UI + SQLite)
-pnpm dev
+# Seed local KV with SRD data
+pnpm run srd:seed
 
-# Run with Telegram polling (for testing the real adapter locally)
+# Start local dev (Miniflare — full CF runtime)
+pnpm dev
+# → http://localhost:3000 (local dev UI)
+# → Worker + DO + D1 + KV all running locally
+
+# Run with Telegram polling (for testing the Telegram adapter locally)
 pnpm dev:telegram
 
 # Run sims
@@ -1319,11 +1331,14 @@ pnpm run sim -- sims/
 ### Environment
 
 ```
-.env.local:
+.dev.vars:
   OPENROUTER_API_KEY=sk-or-...
   TELEGRAM_BOT_TOKEN=...       # optional for local
   STT_MODEL=openai/whisper-1   # or deepgram/parakeet
 ```
+
+Note: Wrangler uses `.dev.vars` for local secrets (not `.env.local`).
+This file is gitignored.
 
 ---
 
@@ -1416,8 +1431,8 @@ tavern/
 │   ├── voice/
 │   │   └── stt.ts             # OpenRouter STT client
 │   │
-│   └── worker/
-│       └── index.ts           # Cloudflare Worker entry point
+│   ├── worker.ts              # Worker entry point (thin webhook router)
+│   └── session.ts             # GameSession Durable Object (the real engine)
 │
 ├── sims/                      # Sim definitions (YAML)
 │   ├── combat_test.yaml
@@ -1441,8 +1456,8 @@ Smallest shippable steps. Each step produces something testable.
 ### Phase 1: Foundation
 1. **Project scaffolding** — package.json (pnpm), tsconfig, wrangler.toml, CLAUDE.md
 2. **Resolver module + tests** — `dice.ts`, `skills.ts`. Pure functions, no dependencies. Port `roll.py` logic to TS with `crypto.getRandomValues()`. Table-driven tests.
-3. **State layer** — SQLite schema, migrations, CRUD store. Local SQLite via `better-sqlite3`.
-4. **SRD data** — Import a subset of the 5e SRD. Start with one class (Monk), one race (Tiefling), core rules. Expand later.
+3. **State layer** — D1 schema, migrations, CRUD store. Runs on Miniflare locally.
+4. **SRD data** — Import a subset of the 5e SRD into KV (local Miniflare KV). Start with one class (Monk), one race (Tiefling), core rules. Expand later.
 
 ### Phase 2: Engine
 5. **Document renderer** — tables → markdown templates for both documents.
