@@ -114,15 +114,18 @@
 
 ## Local Dev UI (Telegram Clone)
 
-- [ ] HTML/CSS/JS page served on localhost in dev mode
-- [ ] Message bubbles (left = narrator, right = player)
-- [ ] Inline keyboard buttons for forks
-- [ ] Trace panel (collapsible, above conversation)
-- [ ] Voice record button (MediaRecorder → STT)
-- [ ] Command input with / autocomplete
+- [x] HTML/CSS/JS page served on localhost (`pnpm dev:ui` → port 7777)
+- [x] Message bubbles (left = narrator, right = player)
+- [x] Inline keyboard buttons for forks (with "Other..." button)
+- [x] Trace panel (collapsible, above conversation, "new" badge)
+- [x] Voice record button (hold-to-record, MediaRecorder → base64 → STT)
+- [x] Command input with / autocomplete (arrow keys, Tab, Enter)
 - [ ] Character sheet slide-out panel
-- [ ] Dark theme
-- [ ] WebSocket for streaming
+- [x] Dark theme (GitHub-dark palette, gold accents)
+- [x] WebSocket transport (typed JSON protocol, auto-reconnect)
+- [x] WebAdapter implementing Adapter interface
+- [x] Typing indicator (animated dots, matches Telegram behavior)
+- [x] Connection status indicator in header
 
 ## Cloudflare Deploy
 

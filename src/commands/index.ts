@@ -19,6 +19,7 @@ import { modelCommand } from "./model";
 import { undoCommand } from "./undo";
 import { restCommand } from "./rest";
 import { resetCommand } from "./reset";
+import { savesCommand } from "./saves";
 
 export function registerCommands(
   registry: CommandRegistry,
@@ -39,4 +40,5 @@ export function registerCommands(
   registry.register(undoCommand(store));
   registry.register(restCommand(store));
   registry.register(resetCommand(store));
+  registry.register(savesCommand(store));
 }

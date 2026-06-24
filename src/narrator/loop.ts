@@ -41,7 +41,9 @@ export interface LoopOptions {
   handlers: Record<string, ToolHandler>;
   messages: ChatMessage[];
   maxIterations?: number;
+  stream?: boolean;
   onToolCall?: (name: string, args: Record<string, unknown>, result: unknown) => void;
+  onContentDelta?: (delta: string) => void;
 }
 
 const DEFAULT_MAX_ITERATIONS = 20;
@@ -56,7 +58,9 @@ export async function runNarratorLoop(opts: LoopOptions): Promise<TurnResult> {
     tools,
     handlers,
     maxIterations = DEFAULT_MAX_ITERATIONS,
+    stream = false,
     onToolCall,
+    onContentDelta,
   } = opts;
 
   const messages = [...opts.messages];
@@ -72,7 +76,9 @@ export async function runNarratorLoop(opts: LoopOptions): Promise<TurnResult> {
   for (let iteration = 0; iteration < maxIterations && !done; iteration++) {
     let completion: CompletionResult;
     try {
-      completion = await client.chat(messages, tools);
+      completion = stream
+        ? await client.chatStream(messages, tools, onContentDelta)
+        : await client.chat(messages, tools);
     } catch (err) {
       return {
         reply: reply || "The narrator stumbles over their words... (API error)",
@@ -94,12 +100,15 @@ export async function runNarratorLoop(opts: LoopOptions): Promise<TurnResult> {
     const assistantMsg = completion.message;
     messages.push(assistantMsg);
 
+    // Capture content from any assistant message — some models put
+    // the narrative in content alongside tool calls instead of using reply()
+    if (assistantMsg.content && assistantMsg.content.trim()) {
+      reply = assistantMsg.content;
+      replyCalled = true;
+    }
+
     // If no tool calls, the model is done (some models don't call `done` explicitly)
     if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
-      if (assistantMsg.content) {
-        reply = assistantMsg.content;
-        replyCalled = true;
-      }
       done = true;
       break;
     }
@@ -228,6 +237,35 @@ export async function runNarratorLoop(opts: LoopOptions): Promise<TurnResult> {
       iterations: toolCalls.length,
       error: "done called without reply",
     };
+  }
+
+  // Nudge: if we have a reply but no forks, ask the model to provide choices.
+  // This catches models that put prose in content without calling present_forks.
+  if (reply && forks.length === 0) {
+    messages.push({
+      role: "user",
+      content: "Good narrative. Now call present_forks with 3-5 player choices, then call done.",
+    });
+
+    try {
+      const nudge = stream
+        ? await client.chatStream(messages, tools)
+        : await client.chat(messages, tools);
+
+      totalTokensIn += nudge.usage.prompt_tokens;
+      totalTokensOut += nudge.usage.completion_tokens;
+
+      if (nudge.message.tool_calls) {
+        for (const tc of nudge.message.tool_calls) {
+          if (tc.function.name === "present_forks") {
+            try {
+              const args = JSON.parse(tc.function.arguments) as Record<string, unknown>;
+              forks = (args.forks as Fork[]) ?? [];
+            } catch { /* ignore parse error */ }
+          }
+        }
+      }
+    } catch { /* nudge failed, continue without forks */ }
   }
 
   return {

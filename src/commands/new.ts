@@ -75,8 +75,12 @@ export function newCommand(store: GameStore, srd: SrdLoader): CommandDef {
 
       // Quick mode: /new Name Class Race Level
       if (parts.length >= 2) {
+        await store.deactivateSaves(ctx.chatId);
         return quickCreate(store, srd, ctx.chatId, parts);
       }
+
+      // Deactivate any current save before starting a new one
+      await store.deactivateSaves(ctx.chatId);
 
       // Interactive mode
       const result = await startOnboarding(srd);

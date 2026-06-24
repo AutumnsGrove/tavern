@@ -10,16 +10,25 @@ export const config = {
   // ── Models ──────────────────────────────────────────────────
 
   /** Default narrator model (OpenRouter model ID) */
-  defaultModel: "xiaomi/mimo-v2.5",
+  defaultModel: "deepseek/deepseek-v4-flash",
 
   /** Available models for the /model picker */
   availableModels: [
-    { id: "xiaomi/mimo-v2.5", label: "MiMo v2.5", tier: "default" },
-    { id: "xiaomi/mimo-v2.5-pro", label: "MiMo v2.5 Pro", tier: "quality" },
-    { id: "deepseek/deepseek-v4-flash", label: "DeepSeek V4 Flash", tier: "cheap" },
+    { id: "deepseek/deepseek-v4-flash", label: "DeepSeek V4 Flash", tier: "default" },
     { id: "deepseek/deepseek-v4-pro", label: "DeepSeek V4 Pro", tier: "quality" },
+    { id: "xiaomi/mimo-v2.5", label: "MiMo v2.5", tier: "cheap" },
+    { id: "xiaomi/mimo-v2.5-pro", label: "MiMo v2.5 Pro", tier: "quality" },
     { id: "qwen/qwen3-235b-a22b-2507", label: "Qwen3 235B MoE", tier: "ultra-cheap" },
   ] as const,
+
+  /** Per-model pricing ($ per 1M tokens) from OpenRouter */
+  modelPricing: {
+    "deepseek/deepseek-v4-flash": { input: 0.09, output: 0.18, cachedInput: 0.02 },
+    "deepseek/deepseek-v4-pro": { input: 0.435, output: 0.87, cachedInput: 0.003625 },
+    "xiaomi/mimo-v2.5": { input: 0.105, output: 0.28, cachedInput: 0.105 },
+    "xiaomi/mimo-v2.5-pro": { input: 0.435, output: 0.87, cachedInput: 0.0036 },
+    "qwen/qwen3-235b-a22b-2507": { input: 0.09, output: 0.10, cachedInput: 0.018 },
+  } as Record<string, { input: number; output: number; cachedInput: number }>,
 
   /** STT model for voice memos */
   sttModel: "nvidia/parakeet-tdt-0.6b-v3",

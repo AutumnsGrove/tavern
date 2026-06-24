@@ -13,7 +13,7 @@ import type { ToolHandler } from "../narrator/loop";
 import type { ChatMessage } from "../narrator/client";
 import { NarratorClient } from "../narrator/client";
 import { runNarratorLoop } from "../narrator/loop";
-import { ALL_TOOLS } from "../narrator/tools/registry";
+import { getActiveTools } from "../narrator/tools/registry";
 import { buildContext } from "./context";
 import { config } from "../config";
 import { resolve, resolveDamage } from "../resolver/dice";
@@ -49,6 +49,12 @@ export interface TurnInput {
   narrationMode: "verbose" | "concise";
 }
 
+export interface TurnCallbacks {
+  onContentDelta?: (delta: string) => void;
+  onTrace?: (line: string) => void;
+  stream?: boolean;
+}
+
 export interface TurnOutput {
   reply: string;
   forks: Fork[];
@@ -60,11 +66,12 @@ export interface TurnOutput {
   error?: string;
 }
 
-export async function handleTurn(deps: TurnDeps, input: TurnInput): Promise<TurnOutput> {
+export async function handleTurn(deps: TurnDeps, input: TurnInput, callbacks?: TurnCallbacks): Promise<TurnOutput> {
   const { store, srd, apiKey, model } = deps;
   const { chatId, saveId, text, narrationMode } = input;
 
   const trace = new TraceBoard();
+  trace.onAdd = (line) => callbacks?.onTrace?.(line);
 
   // Load current state
   const character = await store.getCharacter(saveId);
@@ -212,12 +219,17 @@ export async function handleTurn(deps: TurnDeps, input: TurnInput): Promise<Turn
     maxTokens: config.narratorMaxTokens,
     temperature: config.narratorTemperature,
   });
+  const inCombat = !!(combat && combat.state === "active");
+  const activeTools = getActiveTools(inCombat);
+
   const result = await runNarratorLoop({
     client,
-    tools: ALL_TOOLS,
+    tools: activeTools,
     handlers,
     messages,
     maxIterations: config.maxToolIterations,
+    stream: callbacks?.stream ?? false,
+    onContentDelta: callbacks?.onContentDelta,
     onToolCall: (name, args, resultData) => {
       if (name === "request_roll" || name === "request_damage") {
         const r = resultData as Record<string, unknown>;
@@ -243,9 +255,19 @@ export async function handleTurn(deps: TurnDeps, input: TurnInput): Promise<Turn
     model: result.model,
   });
 
+  // Cost estimation
+  const pricing = config.modelPricing[model];
+  let costStr = "";
+  if (pricing) {
+    const inCost = (result.totalTokensIn / 1_000_000) * pricing.input;
+    const outCost = (result.totalTokensOut / 1_000_000) * pricing.output;
+    const totalCost = inCost + outCost;
+    costStr = ` · $${totalCost.toFixed(4)}`;
+  }
+
   // Add meta trace
   trace.add("meta",
-    `⏱ ${result.iterations} tool calls · ${result.totalTokensIn + result.totalTokensOut} tokens · ${result.model}`
+    `⏱ ${result.iterations} tool calls · ${result.totalTokensIn}↓ ${result.totalTokensOut}↑ tokens${costStr} · ${result.model}`
   );
 
   await store.updateSaveTimestamp(saveId);

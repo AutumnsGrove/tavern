@@ -1,6 +1,7 @@
 /**
- * Tool registry. Collects all tool definitions from individual files.
- * Adding a new tool = create a file, add one import here.
+ * Tool registry. Progressive loading à la her-go: hot tools are
+ * always present, combat tools only load when combat is active.
+ * Saves ~1K tokens/turn outside combat.
  */
 
 import type { ToolDef } from "../client";
@@ -21,29 +22,39 @@ import { definition as endCombat } from "./end-combat";
 import { definition as enemyAction } from "./enemy-action";
 import { definition as endScene } from "./end-scene";
 
-/** All narrator tool definitions, in the order they appear in the prompt. */
-export const ALL_TOOLS: ToolDef[] = [
-  // Control
+/** Hot tools — always present regardless of game state. */
+const HOT_TOOLS: ToolDef[] = [
   think,
   reply,
   presentForks,
   done,
-  // Dice & mechanics
   requestRoll,
   requestDamage,
   lookupRule,
-  // State
   getCharacter,
   getWorld,
   updateCharacter,
   updateWorld,
-  // Combat
+  endScene,
   startCombat,
+];
+
+/** Combat-only tools — loaded when combat state is active. */
+const COMBAT_TOOLS: ToolDef[] = [
   endCombat,
   enemyAction,
-  // Scene
-  endScene,
 ];
+
+/** All tools (for tests and backward compat). */
+export const ALL_TOOLS: ToolDef[] = [...HOT_TOOLS, ...COMBAT_TOOLS];
+
+/**
+ * Get the active tool set for this turn.
+ * Combat tools only appear when combat is active.
+ */
+export function getActiveTools(inCombat: boolean): ToolDef[] {
+  return inCombat ? [...HOT_TOOLS, ...COMBAT_TOOLS] : HOT_TOOLS;
+}
 
 /** Look up a tool definition by name. */
 export function getToolDef(name: string): ToolDef | undefined {

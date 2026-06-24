@@ -174,6 +174,23 @@ export class GameStore {
     return result.results;
   }
 
+  async deactivateSaves(chatId: string): Promise<void> {
+    await this.db
+      .prepare("UPDATE saves SET active = 0 WHERE chat_id = ? AND active = 1")
+      .bind(chatId)
+      .run();
+  }
+
+  async activateSave(saveId: string): Promise<void> {
+    const save = await this.getSave(saveId);
+    if (!save) return;
+    await this.deactivateSaves(save.chat_id);
+    await this.db
+      .prepare("UPDATE saves SET active = 1, updated_at = datetime('now') WHERE save_id = ?")
+      .bind(saveId)
+      .run();
+  }
+
   async updateSaveTimestamp(saveId: string): Promise<void> {
     await this.db
       .prepare("UPDATE saves SET updated_at = datetime('now') WHERE save_id = ?")

@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tavern — Dev UI</title>
+<style>
+  :root {
+    --bg: #0e1117;
+    --surface: #161b22;
+    --surface2: #1c2333;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #c9a04e;
+    --accent-dim: #8b6914;
+    --dm: #1a2332;
+    --player: #1e2a1e;
+    --error: #f85149;
+    --trace-bg: #1a1a2e;
+    --trace-text: #a8a8d0;
+    --typing-dot: #c9a04e;
+    --keyboard-bg: #21262d;
+    --keyboard-hover: #30363d;
+    --radius: 12px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Header ──────────────────────────────────────────── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  header h1 { font-size: 16px; font-weight: 600; color: var(--accent); }
+
+  .session-stats {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+
+  header .status {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  header .status .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #f85149; transition: background 0.3s;
+  }
+  header .status .dot.connected { background: #3fb950; }
+
+  /* ── Messages ────────────────────────────────────────── */
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    scroll-behavior: smooth;
+  }
+
+  .msg {
+    max-width: 80%;
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    line-height: 1.55;
+    font-size: 14px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    animation: fadeIn 0.2s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg.dm {
+    align-self: flex-start;
+    background: var(--dm);
+    border-bottom-left-radius: 4px;
+  }
+
+  .msg.player {
+    align-self: flex-end;
+    background: var(--player);
+    border-bottom-right-radius: 4px;
+  }
+
+  .msg.error {
+    align-self: flex-start;
+    background: #2d1b1b;
+    border: 1px solid var(--error);
+    color: #ffa198;
+    border-bottom-left-radius: 4px;
+  }
+
+  .msg.system {
+    align-self: center;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 13px;
+    text-align: center;
+    padding: 4px 12px;
+    max-width: 100%;
+  }
+
+  /* ── Inline Trace Bubble ────────────────────────────── */
+  .msg.trace {
+    align-self: flex-start;
+    background: var(--trace-bg);
+    color: var(--trace-text);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    padding: 8px 12px;
+    max-width: 90%;
+    border-bottom-left-radius: 4px;
+    border-left: 3px solid var(--accent-dim);
+  }
+
+  /* ── Inline Keyboard ────────────────────────────────── */
+  .keyboard {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+    max-width: 80%;
+    align-self: flex-start;
+    animation: fadeIn 0.2s ease;
+  }
+
+  .keyboard button {
+    background: var(--keyboard-bg);
+    color: var(--accent);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+
+  .keyboard button:hover {
+    background: var(--keyboard-hover);
+    border-color: var(--accent-dim);
+  }
+
+  .keyboard button:active { transform: scale(0.97); }
+  .keyboard button.other { color: var(--text-dim); border-style: dashed; }
+
+  /* ── Typing Indicator ───────────────────────────────── */
+  .typing {
+    align-self: flex-start;
+    display: none;
+    gap: 4px;
+    padding: 12px 18px;
+    background: var(--dm);
+    border-radius: var(--radius);
+    border-bottom-left-radius: 4px;
+  }
+
+  .typing.active { display: flex; }
+
+  .typing span {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--typing-dot);
+    animation: bounce 1.4s ease-in-out infinite;
+  }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-6px); opacity: 1; }
+  }
+
+  /* ── Input Bar ──────────────────────────────────────── */
+  #input-bar {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  #input-bar textarea {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+    padding: 10px 16px;
+    resize: none;
+    max-height: 120px;
+    line-height: 1.4;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  #input-bar textarea:focus { border-color: var(--accent-dim); }
+  #input-bar textarea::placeholder { color: var(--text-dim); }
+
+  #input-bar button {
+    width: 40px; height: 40px; border-radius: 50%;
+    border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: all 0.15s;
+  }
+
+  #send-btn { background: var(--accent); color: var(--bg); }
+  #send-btn:hover { filter: brightness(1.1); }
+  #send-btn:disabled { opacity: 0.3; cursor: default; }
+
+  #voice-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border) !important;
+    color: var(--text-dim);
+  }
+  #voice-btn:hover { background: var(--keyboard-hover); }
+  #voice-btn.recording { background: #f8514933; color: var(--error); border-color: var(--error) !important; }
+
+  /* ── Command Autocomplete ───────────────────────────── */
+  #autocomplete {
+    position: absolute; bottom: 100%; left: 16px; right: 16px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; display: none; overflow: hidden; margin-bottom: 4px;
+  }
+  #autocomplete.open { display: block; }
+  #autocomplete .item { padding: 8px 14px; cursor: pointer; font-size: 13px; display: flex; gap: 8px; }
+  #autocomplete .item:hover, #autocomplete .item.selected { background: var(--keyboard-hover); }
+  #autocomplete .item .cmd { color: var(--accent); font-weight: 600; }
+  #autocomplete .item .desc { color: var(--text-dim); }
+  #input-wrapper { position: relative; flex: 1; }
+
+  /* ── Scrollbar ──────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🍺 Tavern</h1>
+  <span class="session-stats" id="session-stats"></span>
+  <div class="status">
+    <div class="dot" id="status-dot"></div>
+    <span id="status-text">Connecting...</span>
+  </div>
+</header>
+
+<div id="messages">
+  <div class="msg system">Type /new to start a campaign, or /help for commands.</div>
+</div>
+
+<div class="typing" id="typing">
+  <span></span><span></span><span></span>
+</div>
+
+<div id="input-bar">
+  <button id="voice-btn" title="Hold to record voice">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+      <line x1="12" y1="19" x2="12" y2="22"/>
+    </svg>
+  </button>
+  <div id="input-wrapper">
+    <div id="autocomplete"></div>
+    <textarea id="input" rows="1" placeholder="Type a message or /command..." autofocus></textarea>
+  </div>
+  <button id="send-btn" disabled title="Send">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+    </svg>
+  </button>
+</div>
+
+<script>
+const COMMANDS = [
+  { cmd: "/new", desc: "Start a new campaign" },
+  { cmd: "/help", desc: "Show available commands" },
+  { cmd: "/sheet", desc: "View character sheet" },
+  { cmd: "/inventory", desc: "View inventory" },
+  { cmd: "/abilities", desc: "View abilities" },
+  { cmd: "/world", desc: "View world state" },
+  { cmd: "/roll", desc: "Roll dice (e.g. /roll 2d6+3)" },
+  { cmd: "/model", desc: "Change narrator model" },
+  { cmd: "/rest", desc: "Short or long rest" },
+  { cmd: "/undo", desc: "Undo last turn" },
+  { cmd: "/reset", desc: "Clear message history" },
+  { cmd: "/saves", desc: "List/switch campaigns" },
+  { cmd: "/concise", desc: "Concise narration mode" },
+  { cmd: "/verbose", desc: "Verbose narration mode" },
+  { cmd: "/traces", desc: "Toggle trace display" },
+];
+
+// ── DOM refs ───────────────────────────────────────────
+const messagesEl = document.getElementById("messages");
+const inputEl = document.getElementById("input");
+const sendBtn = document.getElementById("send-btn");
+const voiceBtn = document.getElementById("voice-btn");
+const typingEl = document.getElementById("typing");
+const statusDot = document.getElementById("status-dot");
+const statusText = document.getElementById("status-text");
+const autocompleteEl = document.getElementById("autocomplete");
+const sessionStatsEl = document.getElementById("session-stats");
+
+let ws = null;
+let mediaRecorder = null;
+let audioChunks = [];
+let acIndex = -1;
+let streamingBubble = null;
+let pendingTraceLines = [];
+
+// ── WebSocket ──────────────────────────────────────────
+function connect() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  ws = new WebSocket(`${proto}//${location.host}`);
+
+  ws.onopen = () => {
+    statusDot.classList.add("connected");
+    statusText.textContent = "Connected";
+  };
+
+  ws.onclose = () => {
+    statusDot.classList.remove("connected");
+    statusText.textContent = "Disconnected — reconnecting...";
+    setTimeout(connect, 2000);
+  };
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    switch (msg.type) {
+      case "narrative": addDmMessage(msg.text, msg.forks); break;
+      case "error": addErrorMessage(msg.text); break;
+      case "forks": addKeyboard(msg.forks); break;
+      case "trace": addTraceBubble(msg.text); break;
+      case "trace_line":
+        pendingTraceLines.push(msg.text);
+        updateLiveTrace();
+        break;
+      case "stream_start":
+        typingEl.classList.remove("active");
+        pendingTraceLines = [];
+        streamingBubble = document.createElement("div");
+        streamingBubble.className = "msg dm";
+        streamingBubble.textContent = "";
+        messagesEl.appendChild(streamingBubble);
+        scrollToBottom();
+        break;
+      case "stream_delta":
+        if (streamingBubble) {
+          streamingBubble.textContent += msg.text;
+          scrollToBottom();
+        }
+        break;
+      case "stream_end":
+        typingEl.classList.remove("active");
+        if (streamingBubble) {
+          if (msg.text) streamingBubble.textContent = msg.text;
+          if (!streamingBubble.textContent.trim()) streamingBubble.remove();
+          streamingBubble = null;
+        }
+        if (msg.forks && msg.forks.length > 0) addKeyboard(msg.forks);
+        break;
+      case "session_stats":
+        sessionStatsEl.textContent = `${msg.turns} turn${msg.turns !== 1 ? "s" : ""} · $${msg.cost.toFixed(4)}`;
+        break;
+      case "typing":
+        if (msg.active) {
+          typingEl.classList.add("active");
+          scrollToBottom();
+        } else {
+          typingEl.classList.remove("active");
+        }
+        break;
+    }
+  };
+}
+
+// ── Messages ───────────────────────────────────────────
+function addDmMessage(text, forks) {
+  typingEl.classList.remove("active");
+  const el = document.createElement("div");
+  el.className = "msg dm";
+  el.textContent = text;
+  messagesEl.appendChild(el);
+  if (forks && forks.length > 0) addKeyboard(forks);
+  scrollToBottom();
+}
+
+function addPlayerMessage(text) {
+  const el = document.createElement("div");
+  el.className = "msg player";
+  el.textContent = text;
+  messagesEl.appendChild(el);
+  scrollToBottom();
+}
+
+function addErrorMessage(text) {
+  typingEl.classList.remove("active");
+  const el = document.createElement("div");
+  el.className = "msg error";
+  el.textContent = text;
+  messagesEl.appendChild(el);
+  scrollToBottom();
+}
+
+function addTraceBubble(text) {
+  const el = document.createElement("div");
+  el.className = "msg trace";
+  el.textContent = text;
+  // Insert before the streaming bubble or last DM message
+  const target = streamingBubble || messagesEl.lastElementChild;
+  if (target && target !== messagesEl.firstElementChild) {
+    messagesEl.insertBefore(el, target);
+  } else {
+    messagesEl.appendChild(el);
+  }
+  scrollToBottom();
+}
+
+function updateLiveTrace() {
+  let live = messagesEl.querySelector(".msg.trace.live");
+  if (!live) {
+    live = document.createElement("div");
+    live.className = "msg trace live";
+    const target = streamingBubble || null;
+    if (target) {
+      messagesEl.insertBefore(live, target);
+    } else {
+      messagesEl.appendChild(live);
+    }
+  }
+  live.textContent = pendingTraceLines.join("\n");
+  scrollToBottom();
+}
+
+function addKeyboard(forks) {
+  const prev = messagesEl.querySelector(".keyboard:last-child");
+  if (prev) prev.remove();
+
+  const kb = document.createElement("div");
+  kb.className = "keyboard";
+
+  for (const fork of forks) {
+    const btn = document.createElement("button");
+    btn.textContent = fork.label;
+    btn.title = fork.detail;
+    btn.onclick = () => {
+      addPlayerMessage(fork.label);
+      kb.remove();
+      ws.send(JSON.stringify({ type: "message", text: fork.label }));
+    };
+    kb.appendChild(btn);
+  }
+
+  const other = document.createElement("button");
+  other.textContent = "Other...";
+  other.className = "other";
+  other.onclick = () => {
+    kb.remove();
+    inputEl.focus();
+    inputEl.placeholder = "Type your action...";
+  };
+  kb.appendChild(other);
+
+  messagesEl.appendChild(kb);
+  scrollToBottom();
+}
+
+function scrollToBottom() {
+  requestAnimationFrame(() => {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  });
+}
+
+// ── Send ───────────────────────────────────────────────
+function send() {
+  const text = inputEl.value.trim();
+  if (!text || !ws || ws.readyState !== 1) return;
+
+  const kb = messagesEl.querySelector(".keyboard:last-child");
+  if (kb) kb.remove();
+
+  addPlayerMessage(text);
+  ws.send(JSON.stringify({ type: "message", text }));
+  inputEl.value = "";
+  inputEl.style.height = "auto";
+  sendBtn.disabled = true;
+  closeAutocomplete();
+}
+
+// ── Input handling ─────────────────────────────────────
+inputEl.addEventListener("input", () => {
+  sendBtn.disabled = !inputEl.value.trim();
+  inputEl.style.height = "auto";
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px";
+  handleAutocomplete();
+});
+
+inputEl.addEventListener("keydown", (e) => {
+  if (autocompleteEl.classList.contains("open")) {
+    const items = autocompleteEl.querySelectorAll(".item");
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      acIndex = Math.min(acIndex + 1, items.length - 1);
+      updateAcSelection(items);
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      acIndex = Math.max(acIndex - 1, 0);
+      updateAcSelection(items);
+      return;
+    }
+    if (e.key === "Tab" || (e.key === "Enter" && acIndex >= 0)) {
+      e.preventDefault();
+      if (acIndex >= 0 && items[acIndex]) {
+        inputEl.value = items[acIndex].dataset.cmd + " ";
+        closeAutocomplete();
+        sendBtn.disabled = false;
+      }
+      return;
+    }
+    if (e.key === "Escape") { closeAutocomplete(); return; }
+  }
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+});
+
+sendBtn.addEventListener("click", send);
+
+// ── Autocomplete ───────────────────────────────────────
+function handleAutocomplete() {
+  const val = inputEl.value;
+  if (!val.startsWith("/") || val.includes(" ")) { closeAutocomplete(); return; }
+
+  const query = val.toLowerCase();
+  const matches = COMMANDS.filter(c => c.cmd.startsWith(query));
+  if (matches.length === 0 || (matches.length === 1 && matches[0].cmd === val)) {
+    closeAutocomplete(); return;
+  }
+
+  acIndex = 0;
+  autocompleteEl.innerHTML = matches.map((m, i) =>
+    `<div class="item${i === 0 ? ' selected' : ''}" data-cmd="${m.cmd}">
+      <span class="cmd">${m.cmd}</span>
+      <span class="desc">${m.desc}</span>
+    </div>`
+  ).join("");
+
+  autocompleteEl.querySelectorAll(".item").forEach(item => {
+    item.addEventListener("click", () => {
+      inputEl.value = item.dataset.cmd + " ";
+      closeAutocomplete();
+      inputEl.focus();
+      sendBtn.disabled = false;
+    });
+  });
+  autocompleteEl.classList.add("open");
+}
+
+function closeAutocomplete() { autocompleteEl.classList.remove("open"); acIndex = -1; }
+function updateAcSelection(items) { items.forEach((el, i) => el.classList.toggle("selected", i === acIndex)); }
+
+// ── Voice recording ────────────────────────────────────
+let isRecording = false;
+
+voiceBtn.addEventListener("mousedown", startRecording);
+voiceBtn.addEventListener("touchstart", (e) => { e.preventDefault(); startRecording(); });
+voiceBtn.addEventListener("mouseup", stopRecording);
+voiceBtn.addEventListener("mouseleave", stopRecording);
+voiceBtn.addEventListener("touchend", stopRecording);
+
+async function startRecording() {
+  if (isRecording) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+      ? "audio/webm;codecs=opus" : "audio/webm";
+    mediaRecorder = new MediaRecorder(stream, { mimeType });
+    audioChunks = [];
+
+    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
+
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      if (audioChunks.length === 0) return;
+      const blob = new Blob(audioChunks, { type: "audio/webm" });
+      const buf = await blob.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      addPlayerMessage("🎤 [Voice memo]");
+      ws.send(JSON.stringify({ type: "voice", audio: btoa(binary) }));
+    };
+
+    mediaRecorder.start();
+    isRecording = true;
+    voiceBtn.classList.add("recording");
+  } catch (err) { console.error("Mic access denied:", err); }
+}
+
+function stopRecording() {
+  if (!isRecording || !mediaRecorder) return;
+  isRecording = false;
+  voiceBtn.classList.remove("recording");
+  mediaRecorder.stop();
+}
+
+// ── Boot ───────────────────────────────────────────────
+connect();
+</script>
+</body>
+</html>

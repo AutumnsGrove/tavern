@@ -26,8 +26,7 @@ export const helpCommand: CommandDef = {
 /traces — Toggle trace messages
 
 **Session**
-/save — Explicit save
-/load — Load a save slot
+/saves — List campaigns or switch between them
 /undo — Rewind last turn
 /reset — Clear context, keep progress
 /help — This message`,

@@ -27,12 +27,14 @@ const SLOT_HEADERS: Record<TraceSlot, string> = {
 
 export class TraceBoard {
   private slots = new Map<TraceSlot, string[]>();
+  onAdd?: (line: string) => void;
 
   add(slot: TraceSlot, line: string): void {
     if (!this.slots.has(slot)) {
       this.slots.set(slot, []);
     }
     this.slots.get(slot)!.push(line);
+    this.onAdd?.(line);
   }
 
   get(slot: TraceSlot): string[] {

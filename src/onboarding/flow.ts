@@ -95,7 +95,7 @@ async function runStep(
     case "stats":
       return stepStats(state);
     case "level":
-      return stepLevel(state, input);
+      return stepLevel(state, input, srd);
     case "subclass":
       return stepSubclass(state, input, srd);
     case "skills":
@@ -284,6 +284,7 @@ async function stepStats(state: OnboardingState): Promise<StepResult> {
 async function stepLevel(
   state: OnboardingState,
   input: string,
+  srd: SrdLoader,
 ): Promise<StepResult> {
   // Handle reroll from stats step
   if (input.toLowerCase().includes("reroll")) {
@@ -306,7 +307,7 @@ async function stepLevel(
       } else {
         state.step = "name";
       }
-      return runStep(state, "", null as any);
+      return runStep(state, "", srd);
     }
   }
 
