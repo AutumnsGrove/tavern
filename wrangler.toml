@@ -1,0 +1,28 @@
+name = "tavern"
+main = "src/worker.ts"
+compatibility_date = "2025-06-01"
+
+# Durable Object: one GameSession per chat_id
+[durable_objects]
+bindings = [
+  { name = "GAME_SESSION", class_name = "GameSession" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["GameSession"]
+
+# D1 database for persistent game state
+[[d1_databases]]
+binding = "DB"
+database_name = "tavern-db"
+database_id = ""  # filled after `wrangler d1 create tavern-db`
+
+# KV namespace for SRD reference data
+[[kv_namespaces]]
+binding = "SRD"
+id = ""  # filled after `wrangler kv namespace create SRD`
+
+# Local dev settings
+[dev]
+port = 3000
