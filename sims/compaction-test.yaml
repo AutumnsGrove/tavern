@@ -1,0 +1,38 @@
+name: "Compaction Test"
+description: "Forces compaction after turn 3 to verify message trimming and context continuity."
+tags: ["compaction", "regression"]
+
+character:
+  name: "Sayola"
+  race: "Tiefling"
+  class: "Monk"
+  subclass: "Way of the Open Hand"
+  level: 5
+  stats:
+    str: 10
+    dex: 18
+    con: 14
+    int: 12
+    wis: 16
+    cha: 8
+  skill_proficiencies: ["stealth", "acrobatics", "insight", "perception"]
+  save_proficiencies: ["str", "dex"]
+  inventory:
+    - name: "Quarterstaff"
+      category: "weapon"
+
+scenario: |
+  You are in the market square of Thornwall, a small frontier town.
+  It is midday. Merchants call out their wares, children chase each
+  other through the crowd. A notice board near the well catches your eye.
+
+messages:
+  - "I go read the notice board."
+  - "I head to the tavern to ask about the missing merchant."
+  - "I try to persuade the barkeep to tell me more about the disappearances."
+  - "What do I remember about everything that's happened so far?"
+  - "I head out toward the old mine road the barkeep mentioned."
+
+settings:
+  narration_mode: "concise"
+  compact_after: 3

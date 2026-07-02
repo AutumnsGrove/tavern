@@ -5,41 +5,42 @@ import type { ChatMessage } from "../narrator/client";
 describe("compaction", () => {
   describe("compactIfNeeded", () => {
     it("does nothing when under budget", async () => {
-      const messages: ChatMessage[] = [
-        { role: "user", content: "Hello" },
-        { role: "assistant", content: "Hi there" },
+      const dbMessages = [
+        { seq: 1, role: "user", content: "Hello", tool_calls_json: null, tool_call_id: null },
+        { seq: 2, role: "assistant", content: "Hi there", tool_calls_json: null, tool_call_id: null },
       ];
 
-      // Mock store — shouldn't be called
-      const store = {} as any;
+      const store = {
+        getRecentMessages: async () => dbMessages,
+      } as any;
 
-      const result = await compactIfNeeded(store, "save-1", messages);
+      const result = await compactIfNeeded(store, "save-1", []);
       expect(result.trimmedCount).toBe(0);
       expect(result.reason).toBe("none");
     });
 
     it("trims oldest messages when over budget", async () => {
       // Build messages that exceed budget (~12000 tokens = ~48000 chars)
-      const messages: ChatMessage[] = [];
+      const dbMessages: Array<{ seq: number; role: string; content: string; tool_calls_json: null; tool_call_id: null }> = [];
       for (let i = 0; i < 50; i++) {
-        messages.push({
+        dbMessages.push({
+          seq: i + 1,
           role: i % 2 === 0 ? "user" : "assistant",
-          content: "X".repeat(1500), // ~375 tokens each, 50 msgs = ~18750 tokens
+          content: "X".repeat(1500),
+          tool_calls_json: null,
+          tool_call_id: null,
         });
       }
 
       let deletedBefore: number | null = null;
       const store = {
+        getRecentMessages: async () => dbMessages,
         deleteMessagesBeforeSeq: async (_saveId: string, seq: number) => {
           deletedBefore = seq;
         },
-        getRecentMessages: async () => [],
       } as any;
 
-      // Add seq to messages for the mock
-      const messagesWithSeq = messages.map((m, i) => ({ ...m, seq: i + 1 }));
-
-      const result = await compactIfNeeded(store, "save-1", messagesWithSeq as any);
+      const result = await compactIfNeeded(store, "save-1", []);
       expect(result.trimmedCount).toBeGreaterThan(0);
       expect(result.reason).toBe("token_budget");
       expect(deletedBefore).toBeGreaterThan(0);

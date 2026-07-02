@@ -13,7 +13,7 @@
  * Scene summaries are also always available via the world state document.
  */
 
-import type { GameStore } from "../state/store";
+import type { GameStore, Message } from "../state/store";
 import type { ChatMessage } from "../narrator/client";
 import { estimateTokens } from "./context";
 import { config } from "../config";
@@ -37,11 +37,9 @@ export async function compactOnSceneEnd(
     return { trimmedCount: 0, reason: "none" };
   }
 
-  // Keep the most recent messages
   const cutoffIdx = messages.length - keepRecent;
-  const cutoffSeq = (messages[cutoffIdx] as { seq: number }).seq;
+  const cutoffSeq = messages[cutoffIdx]!.seq;
 
-  // Delete everything before the cutoff
   await store.deleteMessagesBeforeSeq(saveId, cutoffSeq);
 
   return {
@@ -52,42 +50,53 @@ export async function compactOnSceneEnd(
 
 /**
  * Token-based compaction: check if hot context exceeds budget.
- * If so, trim oldest messages. Called before building context.
+ * If so, trim oldest messages from the DB. Works directly with
+ * stored messages so we have seq numbers for deletion.
  */
 export async function compactIfNeeded(
   store: GameStore,
   saveId: string,
-  recentMessages: ChatMessage[],
+  _recentMessages: ChatMessage[],
+  budgetOverride?: number,
 ): Promise<CompactionResult> {
-  const tokenCount = estimateTokens(recentMessages);
+  const budget = budgetOverride ?? config.contextTokenBudget;
 
-  if (tokenCount <= config.contextTokenBudget) {
+  // Fetch raw messages from DB (we need seq numbers for deletion)
+  const dbMessages = await store.getRecentMessages(saveId, 1000);
+
+  // Estimate tokens from the stored messages
+  const chatMessages: ChatMessage[] = dbMessages.map((m) => {
+    const msg: ChatMessage = { role: m.role as ChatMessage["role"], content: m.content };
+    if (m.tool_calls_json) msg.tool_calls = JSON.parse(m.tool_calls_json);
+    return msg;
+  });
+  const tokenCount = estimateTokens(chatMessages);
+
+  if (tokenCount <= budget) {
     return { trimmedCount: 0, reason: "none" };
   }
 
   // Find how many messages to drop from the front
-  let tokensToTrim = tokenCount - config.contextTokenBudget;
+  let tokensToTrim = tokenCount - budget;
   let trimCount = 0;
 
-  for (const msg of recentMessages) {
+  for (const msg of chatMessages) {
     if (tokensToTrim <= 0) break;
     tokensToTrim -= estimateTokens([msg]);
     trimCount++;
   }
 
   // Keep at least compactionKeepMessages
-  const maxTrim = recentMessages.length - config.compactionKeepMessages;
+  const maxTrim = dbMessages.length - config.compactionKeepMessages;
   trimCount = Math.min(trimCount, Math.max(0, maxTrim));
 
   if (trimCount <= 0) {
     return { trimmedCount: 0, reason: "none" };
   }
 
-  // Delete the oldest messages from DB
-  const cutoffMsg = recentMessages[trimCount] as { seq?: number } | undefined;
-  if (cutoffMsg?.seq) {
-    await store.deleteMessagesBeforeSeq(saveId, cutoffMsg.seq);
-  }
+  // Delete using the real seq from the DB message
+  const cutoffSeq = dbMessages[trimCount]!.seq;
+  await store.deleteMessagesBeforeSeq(saveId, cutoffSeq);
 
   return { trimmedCount: trimCount, reason: "token_budget" };
 }

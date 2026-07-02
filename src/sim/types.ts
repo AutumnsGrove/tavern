@@ -66,6 +66,8 @@ export interface SimSettings {
   narration_mode?: "verbose" | "concise";
   traces_enabled?: boolean;
   max_turns?: number;
+  /** Force compaction after this turn number (0 = disabled). */
+  compact_after?: number;
 }
 
 export interface SimToolCall {

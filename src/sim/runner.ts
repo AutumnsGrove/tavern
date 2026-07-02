@@ -24,6 +24,8 @@ import { config } from "../config";
 import { proficiencyBonus, abilityModifier } from "../resolver/skills";
 import { rollAbilityScores } from "../resolver/dice";
 import { renderCharacterSheet, renderWorldState } from "../state/documents";
+import { compactIfNeeded } from "../engine/compaction";
+import type { ChatMessage } from "../narrator/client";
 import { renderReport } from "./report";
 import type { SimSuite, SimMessage, SimTurnResult, SimRunResult } from "./types";
 
@@ -276,6 +278,19 @@ async function runSuite(
     const status = result.kind === "error" ? "ERROR" : "ok";
     const tokenInfo = result.tokensIn ? ` (${result.tokensIn}↓ ${result.tokensOut}↑)` : "";
     console.log(`           → ${status} · ${(turnDuration / 1000).toFixed(1)}s${tokenInfo}`);
+
+    // Force compaction after specified turn
+    const compactAfter = suite.settings?.compact_after ?? 0;
+    if (compactAfter > 0 && (i + 1) === compactAfter) {
+      // Use compactOnSceneEnd which trims to keepRecent — force keep only 2
+      const { compactOnSceneEnd } = await import("../engine/compaction");
+      const compResult = await compactOnSceneEnd(store, saveId, 2);
+      if (compResult.trimmedCount > 0) {
+        console.log(`           📎 Compaction: trimmed ${compResult.trimmedCount} messages`);
+      } else {
+        console.log(`           📎 Compaction triggered but nothing to trim`);
+      }
+    }
 
     // If result has forks and next message is a fork pick, resolve it
     if (result.forks && result.forks.length > 0 && i + 1 < suite.messages.length) {
