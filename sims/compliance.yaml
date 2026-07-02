@@ -1,0 +1,41 @@
+name: "Tool Compliance Check"
+description: "Verifies the narrator uses tools correctly: rolls via request_roll, no hallucinated numbers, reply+forks+done every turn."
+tags: ["compliance", "regression"]
+
+character:
+  name: "TestChar"
+  race: "Human"
+  class: "Rogue"
+  level: 3
+  stats:
+    str: 8
+    dex: 16
+    con: 12
+    int: 14
+    wis: 10
+    cha: 14
+  skill_proficiencies: ["stealth", "sleight-of-hand", "deception", "persuasion", "investigation", "perception"]
+  save_proficiencies: ["dex", "int"]
+  inventory:
+    - name: "Rapier"
+      category: "weapon"
+    - name: "Shortbow"
+      category: "weapon"
+    - name: "Thieves' Tools"
+      category: "tool"
+    - name: "Leather Armor"
+      category: "armor"
+
+scenario: |
+  You're in the merchant district of Waterdeep. A locked chest sits
+  in the alley behind the jeweler's shop. A guard patrols nearby,
+  making rounds every few minutes. You have your thieves' tools ready.
+
+messages:
+  - "I want to pick the lock on the chest."
+  - "I try to talk my way out of it if anyone sees me — persuasion."
+  - "I check what's inside the chest."
+  - "I try to sneak away with whatever I found."
+
+settings:
+  narration_mode: "concise"

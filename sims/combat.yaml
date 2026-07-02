@@ -1,0 +1,43 @@
+name: "Combat Flow"
+description: "Tests combat initiation, initiative rolling, attack resolution, and enemy turns."
+tags: ["combat", "mechanics", "tools"]
+
+character:
+  name: "Kael"
+  race: "Half-Orc"
+  class: "Fighter"
+  level: 5
+  stats:
+    str: 18
+    dex: 14
+    con: 16
+    int: 8
+    wis: 12
+    cha: 10
+  skill_proficiencies: ["athletics", "intimidation", "perception", "survival"]
+  save_proficiencies: ["str", "con"]
+  inventory:
+    - name: "Longsword"
+      category: "weapon"
+    - name: "Shield"
+      category: "armor"
+    - name: "Chain Mail"
+      category: "armor"
+    - name: "Healing Potion"
+      qty: 2
+      category: "consumable"
+
+scenario: |
+  The goblin camp sits in a shallow ravine. Three goblins huddle around
+  a small fire, roasting something that smells terrible. They haven't
+  noticed you yet. Their weapons — crude scimitars — lean against a
+  nearby rock.
+
+messages:
+  - "I charge in swinging my longsword at the nearest goblin!"
+  - text: "pick_fork"
+    pick_fork: 1
+  - "I attack the next goblin"
+
+settings:
+  narration_mode: "concise"

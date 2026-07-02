@@ -1,0 +1,43 @@
+name: "Tavern Exploration"
+description: "Basic exploration flow — tests narration, rolls, state updates, and fork presentation."
+tags: ["exploration", "narration", "basic"]
+
+character:
+  name: "Sayola"
+  race: "Tiefling"
+  class: "Monk"
+  subclass: "Way of the Open Hand"
+  level: 5
+  stats:
+    str: 10
+    dex: 18
+    con: 14
+    int: 12
+    wis: 16
+    cha: 8
+  skill_proficiencies: ["stealth", "acrobatics", "insight", "perception"]
+  save_proficiencies: ["str", "dex"]
+  inventory:
+    - name: "Quarterstaff"
+      category: "weapon"
+    - name: "Darts"
+      qty: 10
+      category: "weapon"
+    - name: "Dungeoneer's Pack"
+      category: "gear"
+
+scenario: |
+  You stand at the entrance of the Drowned Lighthouse, a crumbling tower
+  on a rocky outcropping above the churning sea. Salt spray stings your
+  face. The heavy oak door hangs ajar, its iron hinges rusted through.
+  Inside, you can hear the rhythmic drip of water — and something else.
+  A low, guttural humming that rises and falls like a tide.
+
+messages:
+  - "I want to sneak inside quietly, staying low and listening."
+  - "I look around the room carefully — what do I see?"
+  - text: "pick_fork"
+    pick_fork: 1
+
+settings:
+  narration_mode: "concise"

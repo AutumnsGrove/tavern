@@ -7,6 +7,7 @@
 import type { ToolDef } from "../client";
 
 import { definition as think } from "./think";
+import { definition as reply } from "./reply";
 import { definition as presentForks } from "./present-forks";
 import { definition as done } from "./done";
 import { definition as requestRoll } from "./request-roll";
@@ -24,6 +25,7 @@ import { definition as endScene } from "./end-scene";
 /** Hot tools — always present regardless of game state. */
 const HOT_TOOLS: ToolDef[] = [
   think,
+  reply,
   presentForks,
   done,
   requestRoll,

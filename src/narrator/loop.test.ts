@@ -225,6 +225,69 @@ describe("runNarratorLoop", () => {
     expect(result.reply).toBe("Something went wrong in the world...");
   });
 
+  it("handles reply tool call", async () => {
+    const client = makeClient([
+      makeResult({
+        role: "assistant",
+        content: null,
+        tool_calls: [
+          { id: "tc1", type: "function", function: { name: "reply", arguments: '{"text":"You enter the tavern."}' } },
+          { id: "tc2", type: "function", function: { name: "present_forks", arguments: '{"forks":[{"label":"A","detail":"a"},{"label":"B","detail":"b"},{"label":"C","detail":"c"}]}' } },
+          { id: "tc3", type: "function", function: { name: "done", arguments: "{}" } },
+        ],
+      }),
+    ]);
+
+    const result = await runNarratorLoop({
+      client,
+      tools: emptyTools,
+      handlers: {},
+      messages: [{ role: "user", content: "I enter the tavern." }],
+    });
+
+    expect(result.reply).toBe("You enter the tavern.");
+    expect(result.forks).toHaveLength(3);
+    expect(result.error).toBeUndefined();
+  });
+
+  it("appends multiple reply tool calls", async () => {
+    const rollHandler = vi.fn(async () => ({
+      nat: 18, modifier: 4, total: 22, dc: 15,
+      success: true, crit: false, fumble: false,
+    }));
+
+    const client = makeClient([
+      makeResult({
+        role: "assistant",
+        content: null,
+        tool_calls: [
+          { id: "tc1", type: "function", function: { name: "reply", arguments: '{"text":"You creep toward the door..."}' } },
+          { id: "tc2", type: "function", function: { name: "request_roll", arguments: '{"type":"check","skill":"stealth","dc":15,"reason":"sneak"}' } },
+        ],
+      }),
+      makeResult({
+        role: "assistant",
+        content: null,
+        tool_calls: [
+          { id: "tc3", type: "function", function: { name: "reply", arguments: '{"text":"The guard slides past you. You are in."}' } },
+          { id: "tc4", type: "function", function: { name: "present_forks", arguments: '{"forks":[{"label":"A","detail":"a"},{"label":"B","detail":"b"},{"label":"C","detail":"c"}]}' } },
+          { id: "tc5", type: "function", function: { name: "done", arguments: "{}" } },
+        ],
+      }),
+    ]);
+
+    const result = await runNarratorLoop({
+      client,
+      tools: emptyTools,
+      handlers: { request_roll: rollHandler },
+      messages: [{ role: "user", content: "I sneak in." }],
+    });
+
+    expect(result.reply).toContain("You creep toward the door...");
+    expect(result.reply).toContain("The guard slides past you.");
+    expect(result.reply).toContain("\n\n");
+  });
+
   it("tracks token usage across iterations", async () => {
     const client = makeClient([
       makeResult({

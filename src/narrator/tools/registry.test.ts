@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { ALL_TOOLS, getToolDef, getToolNames } from "./registry";
 
 describe("tool registry", () => {
-  it("has all 14 expected tools", () => {
-    expect(ALL_TOOLS).toHaveLength(14);
+  it("has all 15 expected tools", () => {
+    expect(ALL_TOOLS).toHaveLength(15);
   });
 
   it("has no duplicate names", () => {
@@ -23,7 +23,7 @@ describe("tool registry", () => {
   });
 
   const expectedTools = [
-    "think", "present_forks", "done",
+    "think", "reply", "present_forks", "done",
     "request_roll", "request_damage", "lookup_rule",
     "get_character", "get_world", "update_character", "update_world",
     "start_combat", "end_combat", "enemy_action", "end_scene",

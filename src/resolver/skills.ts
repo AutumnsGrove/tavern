@@ -29,6 +29,11 @@ export const SKILL_TO_ABILITY: Record<string, Ability> = {
 
 export const ALL_SKILLS = Object.keys(SKILL_TO_ABILITY);
 
+/** Normalize a skill name to match our map keys. Handles spaces, hyphens, case. */
+export function normalizeSkillName(raw: string): string {
+  return raw.toLowerCase().replace(/[\s-]+/g, "_");
+}
+
 /** Convert an ability score (e.g. 16) to its modifier (e.g. +3). */
 export function abilityModifier(score: number): number {
   return Math.floor((score - 10) / 2);
@@ -58,12 +63,13 @@ export interface ModifierLookupParams {
 
 /** Get the modifier for a skill check (ability mod + proficiency if proficient). */
 export function skillModifier(skill: string, params: ModifierLookupParams): number {
-  const ability = SKILL_TO_ABILITY[skill];
+  const normalized = normalizeSkillName(skill);
+  const ability = SKILL_TO_ABILITY[normalized];
   if (!ability) {
     throw new Error(`unknown skill: ${skill}`);
   }
   const base = abilityModifier(params.scores[ability]);
-  const prof = params.skillProficiencies.includes(skill)
+  const prof = params.skillProficiencies.map(normalizeSkillName).includes(normalized)
     ? proficiencyBonus(params.level)
     : 0;
   return base + prof;

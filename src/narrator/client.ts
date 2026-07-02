@@ -28,15 +28,26 @@ export interface ToolDef {
   };
 }
 
+export interface UsageData {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  cost?: number;
+  prompt_tokens_details?: {
+    cached_tokens?: number;
+  };
+}
+
 export interface CompletionResult {
   message: ChatMessage;
-  usage: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
+  usage: UsageData;
   model: string;
   finishReason: string;
+}
+
+export interface ProviderRouting {
+  order: string[];
+  allow_fallbacks: boolean;
 }
 
 export interface ClientOptions {
@@ -44,6 +55,7 @@ export interface ClientOptions {
   model: string;
   maxTokens?: number;
   temperature?: number;
+  provider?: ProviderRouting;
 }
 
 export class NarratorClient {
@@ -51,14 +63,14 @@ export class NarratorClient {
   private model: string;
   private maxTokens: number;
   private temperature: number;
+  private provider?: ProviderRouting;
 
   constructor(opts: ClientOptions) {
-    // Defaults are in config.ts — import there if you need them.
-    // Here we just accept whatever the caller passes.
     this.apiKey = opts.apiKey;
     this.model = opts.model;
     this.maxTokens = opts.maxTokens ?? 4096;
     this.temperature = opts.temperature ?? 0.8;
+    this.provider = opts.provider;
   }
 
   async chat(
@@ -75,6 +87,10 @@ export class NarratorClient {
     if (tools && tools.length > 0) {
       body.tools = tools;
       body.tool_choice = "auto";
+    }
+
+    if (this.provider) {
+      body.provider = this.provider;
     }
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -101,11 +117,7 @@ export class NarratorClient {
         message: ChatMessage;
         finish_reason: string;
       }>;
-      usage: {
-        prompt_tokens: number;
-        completion_tokens: number;
-        total_tokens: number;
-      };
+      usage: UsageData;
       model: string;
     };
 
@@ -140,6 +152,10 @@ export class NarratorClient {
       body.tool_choice = "auto";
     }
 
+    if (this.provider) {
+      body.provider = this.provider;
+    }
+
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -164,7 +180,7 @@ export class NarratorClient {
     const toolCallParts = new Map<number, { id: string; name: string; args: string }>();
     let model = this.model;
     let finishReason = "stop";
-    let usage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+    let usage: UsageData = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
 
     const reader = response.body!.getReader();
     const decoder = new TextDecoder();

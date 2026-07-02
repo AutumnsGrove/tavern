@@ -5,8 +5,8 @@ export const definition: ToolDef = {
   function: {
     name: "done",
     description:
-      "Signal that this turn is complete. Call this after reply and present_forks. " +
-      "The engine will reject the turn if reply was not called before done.",
+      "Signal that this turn is complete. Call this after you have narrated " +
+      "the scene (via the reply tool) and presented forks.",
     parameters: {
       type: "object",
       properties: {},

@@ -62,7 +62,11 @@ export interface TurnOutput {
   traceBoard: TraceBoard;
   tokensIn: number;
   tokensOut: number;
+  cost: number;
+  cachedTokens: number;
   model: string;
+  iterations: number;
+  toolCalls: Array<{ name: string; args: Record<string, unknown>; result: unknown }>;
   error?: string;
 }
 
@@ -218,6 +222,7 @@ export async function handleTurn(deps: TurnDeps, input: TurnInput, callbacks?: T
     model,
     maxTokens: config.narratorMaxTokens,
     temperature: config.narratorTemperature,
+    provider: config.providerRouting[model],
   });
   const inCombat = !!(combat && combat.state === "active");
   const activeTools = getActiveTools(inCombat);
@@ -255,19 +260,26 @@ export async function handleTurn(deps: TurnDeps, input: TurnInput, callbacks?: T
     model: result.model,
   });
 
-  // Cost estimation
-  const pricing = config.modelPricing[model];
+  // Cost from API (real cost) or estimate from pricing table
+  const apiCost = result.totalCost;
   let costStr = "";
-  if (pricing) {
-    const inCost = (result.totalTokensIn / 1_000_000) * pricing.input;
-    const outCost = (result.totalTokensOut / 1_000_000) * pricing.output;
-    const totalCost = inCost + outCost;
-    costStr = ` · $${totalCost.toFixed(4)}`;
+  if (apiCost > 0) {
+    costStr = ` · $${apiCost.toFixed(4)}`;
+  } else {
+    const pricing = config.modelPricing[model];
+    if (pricing) {
+      costStr = ` · ~$${((result.totalTokensIn / 1_000_000) * pricing.input + (result.totalTokensOut / 1_000_000) * pricing.output).toFixed(4)}`;
+    }
   }
+
+  // Cache info
+  const cacheStr = result.cachedTokens > 0
+    ? ` · ${result.cachedTokens} cached`
+    : "";
 
   // Add meta trace
   trace.add("meta",
-    `⏱ ${result.iterations} tool calls · ${result.totalTokensIn}↓ ${result.totalTokensOut}↑ tokens${costStr} · ${result.model}`
+    `⏱ ${result.iterations} tool calls · ${result.totalTokensIn}↓ ${result.totalTokensOut}↑ tokens${cacheStr}${costStr} · ${result.model}`
   );
 
   await store.updateSaveTimestamp(saveId);
@@ -279,7 +291,11 @@ export async function handleTurn(deps: TurnDeps, input: TurnInput, callbacks?: T
     traceBoard: trace,
     tokensIn: result.totalTokensIn,
     tokensOut: result.totalTokensOut,
+    cost: result.totalCost,
+    cachedTokens: result.cachedTokens,
     model: result.model,
+    iterations: result.iterations,
+    toolCalls: result.toolCalls,
     error: result.error,
   };
 }
@@ -607,8 +623,9 @@ function buildToolHandlers(
         conditions: string[];
       }>;
 
-      const enemyName = args.enemy as string;
+      const enemyName = (args.enemy ?? args.name) as string | undefined;
       const actionName = args.action as string;
+      if (!enemyName) return { error: "missing enemy name (use 'enemy' parameter)" };
       const enemy = enemies.find((e) => e.name.toLowerCase() === enemyName.toLowerCase());
       if (!enemy) return { error: `enemy "${enemyName}" not found` };
       if (enemy.hp_current <= 0) return { error: `${enemyName} is already down` };

@@ -14,7 +14,8 @@
     "db:migrate": "wrangler d1 migrations apply tavern-db --local",
     "typecheck": "tsc --noEmit",
     "play": "tsx src/cli/play.ts",
-    "dev:ui": "tsx src/devui/server.ts"
+    "dev:ui": "tsx src/devui/server.ts",
+    "sim": "tsx src/sim/runner.ts"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8.0",
@@ -25,7 +26,8 @@
     "tsx": "^4.22.4",
     "typescript": "^5.8.0",
     "vitest": "^3.2.0",
-    "wrangler": "^4.50.0"
+    "wrangler": "^4.50.0",
+    "yaml": "^2.9.0"
   },
   "engines": {
     "node": ">=20"

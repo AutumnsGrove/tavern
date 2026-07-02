@@ -5,3 +5,8 @@ dist/
 *.local
 .mf/
 tavern.db
+tavern.db-shm
+tavern.db-wal
+sims/results/*.md
+sims/results/*.db
+sims/results/.sim-*

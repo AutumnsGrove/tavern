@@ -146,15 +146,16 @@ export function resolveDamage(params: {
 }): DamageResult {
   const { dice, modifier = 0, reason } = params;
 
-  const match = dice.match(/^(\d+)d(\d+)$/);
+  const match = dice.match(/^(\d+)d(\d+)(?:\s*\+\s*(\d+))?$/);
   if (!match) {
     throw new Error(`invalid damage notation: ${dice}`);
   }
   const count = parseInt(match[1]!, 10);
   const sides = parseInt(match[2]!, 10);
+  const notationBonus = match[3] ? parseInt(match[3], 10) : 0;
 
   const rolls = rollDice(count, sides);
-  const total = rolls.reduce((sum, n) => sum + n, 0) + modifier;
+  const total = rolls.reduce((sum, n) => sum + n, 0) + modifier + notationBonus;
 
   return { rolls, modifier, total, dice, reason };
 }

@@ -10,7 +10,7 @@ export const config = {
   // ── Models ──────────────────────────────────────────────────
 
   /** Default narrator model (OpenRouter model ID) */
-  defaultModel: "deepseek/deepseek-v4-flash",
+  defaultModel: "xiaomi/mimo-v2.5",
 
   /** Available models for the /model picker */
   availableModels: [
@@ -20,6 +20,19 @@ export const config = {
     { id: "xiaomi/mimo-v2.5-pro", label: "MiMo v2.5 Pro", tier: "quality" },
     { id: "qwen/qwen3-235b-a22b-2507", label: "Qwen3 235B MoE", tier: "ultra-cheap" },
   ] as const,
+
+  /**
+   * Native provider routing. Forces models to use their native
+   * endpoint for best pricing and prompt caching. The native
+   * DeepSeek endpoint caches aggressively — cached tokens cost
+   * ~4.5x less than uncached.
+   */
+  providerRouting: {
+    "deepseek/deepseek-v4-flash": { order: ["DeepSeek"], allow_fallbacks: false },
+    "deepseek/deepseek-v4-pro": { order: ["DeepSeek"], allow_fallbacks: false },
+    "xiaomi/mimo-v2.5": { order: ["Xiaomi"], allow_fallbacks: false },
+    "xiaomi/mimo-v2.5-pro": { order: ["Xiaomi"], allow_fallbacks: false },
+  } as Record<string, { order: string[]; allow_fallbacks: boolean }>,
 
   /** Per-model pricing ($ per 1M tokens) from OpenRouter */
   modelPricing: {

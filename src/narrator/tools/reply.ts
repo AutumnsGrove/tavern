@@ -6,7 +6,10 @@ export const definition: ToolDef = {
     name: "reply",
     description:
       "Send narrative prose to the player. This is the story text they read. " +
-      "Exactly one reply per turn. Write in second person ('you').",
+      "Write in second person ('You step into the shadows...'). " +
+      "You may call this multiple times per turn — for example, narrate the " +
+      "setup, request a roll, then narrate the outcome. Each call appends to " +
+      "the narrative.",
     parameters: {
       type: "object",
       properties: {

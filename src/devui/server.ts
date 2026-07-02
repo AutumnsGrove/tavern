@@ -9,9 +9,9 @@ import { GameStore } from "../state/store";
 import { SrdLoader } from "../srd/loader";
 import { CommandRegistry } from "../gateway/commands";
 import { registerCommands } from "../commands";
-import { handleTurn } from "../engine/turn";
+import { dispatch } from "../gateway/dispatch";
+import type { DispatchDeps } from "../gateway/dispatch";
 import { config } from "../config";
-import { getActiveFlow, handleOnboardingInput } from "../commands/new";
 import { WebAdapter } from "./adapter";
 
 const PORT = 7777;
@@ -19,7 +19,6 @@ const DB_PATH = join(import.meta.dirname, "../../tavern.db");
 const PUBLIC_DIR = join(import.meta.dirname, "public");
 const CHAT_ID = "devui";
 
-// Session-level stats
 let sessionCost = 0;
 let sessionTurns = 0;
 
@@ -51,7 +50,6 @@ async function main() {
     process.exit(1);
   }
 
-  // Initialize local backends (same as CLI)
   const db = createLocalD1(DB_PATH);
   const kv = createLocalKV();
 
@@ -74,6 +72,8 @@ async function main() {
   const commands = new CommandRegistry();
   registerCommands(commands, store, srd);
   const adapter = new WebAdapter();
+
+  const deps: DispatchDeps = { store, srd, commands, apiKey };
 
   // ── HTTP server for static files ─────────────────────────────
   const server = createServer((req, res) => {
@@ -107,17 +107,17 @@ async function main() {
       }
 
       if (payload.type === "message" && payload.text) {
-        await handleInput(payload.text, store, srd, commands, adapter, apiKey);
+        await handleInput(payload.text, deps, adapter, apiKey);
       } else if (payload.type === "callback" && payload.data) {
         if (payload.data === "__other__") {
           adapter.send(CHAT_ID, { text: "Type your action:" });
           return;
         }
-        await handleInput(payload.data, store, srd, commands, adapter, apiKey);
+        await handleInput(payload.data, deps, adapter, apiKey);
       } else if (payload.type === "voice" && payload.audio) {
         const text = await transcribeVoice(payload.audio, adapter, apiKey);
         if (text) {
-          await handleInput(text, store, srd, commands, adapter, apiKey);
+          await handleInput(text, deps, adapter, apiKey);
         }
       }
     });
@@ -135,117 +135,65 @@ async function main() {
 
 async function handleInput(
   text: string,
-  store: GameStore,
-  srd: SrdLoader,
-  commands: CommandRegistry,
+  deps: DispatchDeps,
   adapter: WebAdapter,
   apiKey: string,
 ): Promise<void> {
-  // Onboarding intercept
-  if (getActiveFlow(CHAT_ID) && !text.startsWith("/")) {
-    try {
-      const result = await handleOnboardingInput(CHAT_ID, text, store, srd);
-      await adapter.send(CHAT_ID, { text: result.text, forks: result.forks });
-    } catch (err) {
-      await adapter.send(CHAT_ID, {
-        text: `Onboarding error: ${err instanceof Error ? err.message : String(err)}`,
-        isError: true,
-      });
-    }
-    return;
-  }
-
-  // Command check
-  const parsed = commands.parse(text);
-  if (parsed) {
-    const def = commands.get(parsed.name);
-    if (!def) {
-      await adapter.send(CHAT_ID, { text: `Unknown command: /${parsed.name}`, isError: true });
-      return;
-    }
-
-    let saveId: string | null = null;
-    if (def.requiresSave) {
-      const save = await store.getActiveSave(CHAT_ID);
-      if (!save) {
-        await adapter.send(CHAT_ID, { text: "No active campaign. Start one with /new.", isError: true });
-        return;
-      }
-      saveId = save.save_id;
-    }
-
-    if (parsed.name === "concise" || parsed.name === "verbose") {
-      await store.updateSettings(CHAT_ID, { narration_mode: parsed.name });
-    }
-    if (parsed.name === "traces") {
-      const settings = await store.getSettings(CHAT_ID);
-      await store.updateSettings(CHAT_ID, { traces_enabled: settings.traces_enabled ? 0 : 1 });
-    }
-
-    const result = await def.handler({ chatId: CHAT_ID, saveId, args: parsed.args });
-    await adapter.send(CHAT_ID, { text: result.text, forks: result.forks });
-    return;
-  }
-
-  // Game input
-  const save = await store.getActiveSave(CHAT_ID);
-  if (!save) {
-    await adapter.send(CHAT_ID, { text: "No active campaign. Start one with /new.", isError: true });
-    return;
-  }
-
-  const settings = await store.getSettings(CHAT_ID);
-  const model = settings.model || config.defaultModel;
-  const narrationMode = (settings.narration_mode || config.defaultNarrationMode) as "verbose" | "concise";
+  const settings = await deps.store.getSettings(CHAT_ID);
   const tracesEnabled = !!(settings.traces_enabled ?? config.defaultTracesEnabled);
 
-  const stopTyping = adapter.startTyping(CHAT_ID);
+  // For non-command, non-onboarding input, set up streaming
+  const isCommand = text.startsWith("/");
+  const isStreaming = !isCommand;
 
-  // Signal stream start so client creates an empty bubble
-  adapter.emit({ type: "stream_start" });
+  const stopTyping = isStreaming ? adapter.startTyping(CHAT_ID) : () => {};
+  if (isStreaming) adapter.emit({ type: "stream_start" });
 
   try {
-    const result = await handleTurn(
-      { store, srd, apiKey, model },
-      { chatId: CHAT_ID, saveId: save.save_id, text, narrationMode },
-      {
-        stream: true,
-        onContentDelta: (delta) => adapter.emit({ type: "stream_delta", text: delta }),
-        onTrace: (line) => {
-          if (tracesEnabled) adapter.emit({ type: "trace_line", text: line });
-        },
-      },
-    );
+    const result = await dispatch(deps, CHAT_ID, text, {
+      stream: isStreaming,
+      onContentDelta: isStreaming ? (delta) => adapter.emit({ type: "stream_delta", text: delta }) : undefined,
+      onTrace: (tracesEnabled && isStreaming) ? (line) => adapter.emit({ type: "trace_line", text: line }) : undefined,
+    });
 
     stopTyping();
 
-    // Calculate turn cost
-    const pricing = config.modelPricing[model];
-    let turnCost = 0;
-    if (pricing) {
-      turnCost = (result.tokensIn / 1_000_000) * pricing.input
-               + (result.tokensOut / 1_000_000) * pricing.output;
-    }
-    sessionCost += turnCost;
-    sessionTurns++;
+    if (result.kind === "narrative") {
+      // Use real cost from API, fall back to estimate
+      let turnCost = result.cost ?? 0;
+      if (turnCost === 0) {
+        const model = settings.model || config.defaultModel;
+        const pricing = config.modelPricing[model];
+        if (pricing && result.tokensIn && result.tokensOut) {
+          turnCost = (result.tokensIn / 1_000_000) * pricing.input
+                   + (result.tokensOut / 1_000_000) * pricing.output;
+        }
+      }
+      sessionCost += turnCost;
+      sessionTurns++;
 
-    // Send trace as inline bubble (complete, above the narrative)
-    if (tracesEnabled && result.traceLines.length > 0) {
-      adapter.emit({ type: "trace", text: result.traceLines.join("\n") });
-    }
+      if (tracesEnabled && result.traceLines && result.traceLines.length > 0) {
+        adapter.emit({ type: "trace", text: result.traceLines.join("\n") });
+      }
 
-    // Finalize the stream with the complete reply + forks
-    adapter.emit({ type: "stream_end", text: result.reply, forks: result.forks });
+      adapter.emit({ type: "stream_end", text: result.text, forks: result.forks });
+      adapter.emit({ type: "session_stats", cost: sessionCost, turns: sessionTurns });
 
-    // Update session stats in header
-    adapter.emit({ type: "session_stats", cost: sessionCost, turns: sessionTurns });
-
-    if (result.error) {
-      await adapter.send(CHAT_ID, { text: result.error, isError: true });
+      if (result.error) {
+        await adapter.send(CHAT_ID, { text: result.error, isError: true });
+      }
+    } else {
+      // Command, onboarding, or error — send as regular message
+      if (isStreaming) adapter.emit({ type: "stream_end", text: "", forks: [] });
+      await adapter.send(CHAT_ID, {
+        text: result.text,
+        forks: result.forks,
+        isError: result.kind === "error",
+      });
     }
   } catch (err) {
     stopTyping();
-    adapter.emit({ type: "stream_end", text: "", forks: [] });
+    if (isStreaming) adapter.emit({ type: "stream_end", text: "", forks: [] });
     await adapter.send(CHAT_ID, {
       text: `Engine error: ${err instanceof Error ? err.message : String(err)}`,
       isError: true,

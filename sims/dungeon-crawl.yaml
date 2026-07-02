@@ -1,0 +1,48 @@
+name: "Dungeon Crawl — Extended"
+description: "5-turn exploration with increasing tension. Tests coherence, state tracking, and roll integration over a longer session."
+tags: ["exploration", "coherence", "extended"]
+
+character:
+  name: "Sayola"
+  race: "Tiefling"
+  class: "Monk"
+  subclass: "Way of the Open Hand"
+  level: 5
+  stats:
+    str: 10
+    dex: 18
+    con: 14
+    int: 12
+    wis: 16
+    cha: 8
+  skill_proficiencies: ["stealth", "acrobatics", "insight", "perception"]
+  save_proficiencies: ["str", "dex"]
+  inventory:
+    - name: "Quarterstaff"
+      category: "weapon"
+    - name: "Darts"
+      qty: 10
+      category: "weapon"
+    - name: "Rope"
+      qty: 50
+      category: "gear"
+    - name: "Torch"
+      qty: 3
+      category: "gear"
+
+scenario: |
+  The entrance to the Sunken Crypts lies before you — a stone archway
+  half-buried in vines and mud. The air rising from the darkness below
+  smells of wet earth and something sour. Carved into the keystone is
+  a warning in Infernal: "What sleeps here earned its rest."
+
+messages:
+  - "I light a torch and head down the stairs carefully, watching for traps."
+  - "I examine the door more closely — is there a lock or mechanism?"
+  - text: "pick_fork"
+    pick_fork: 1
+  - "I search the room thoroughly for anything useful."
+  - "I want to keep going deeper. What's beyond this room?"
+
+settings:
+  narration_mode: "concise"

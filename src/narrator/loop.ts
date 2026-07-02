@@ -20,6 +20,7 @@ export interface TurnResult {
   totalTokensIn: number;
   totalTokensOut: number;
   totalCost: number;
+  cachedTokens: number;
   model: string;
   iterations: number;
   error?: string;
@@ -69,6 +70,8 @@ export async function runNarratorLoop(opts: LoopOptions): Promise<TurnResult> {
   const toolCalls: ToolCallRecord[] = [];
   let totalTokensIn = 0;
   let totalTokensOut = 0;
+  let totalCost = 0;
+  let cachedTokens = 0;
   let model = "";
   let done = false;
   let replyCalled = false;
@@ -86,7 +89,8 @@ export async function runNarratorLoop(opts: LoopOptions): Promise<TurnResult> {
         toolCalls,
         totalTokensIn,
         totalTokensOut,
-        totalCost: 0,
+        totalCost,
+        cachedTokens,
         model,
         iterations: iteration + 1,
         error: err instanceof Error ? err.message : String(err),
@@ -95,6 +99,8 @@ export async function runNarratorLoop(opts: LoopOptions): Promise<TurnResult> {
 
     totalTokensIn += completion.usage.prompt_tokens;
     totalTokensOut += completion.usage.completion_tokens;
+    totalCost += completion.usage.cost ?? 0;
+    cachedTokens += completion.usage.prompt_tokens_details?.cached_tokens ?? 0;
     model = completion.model;
 
     const assistantMsg = completion.message;
@@ -135,6 +141,23 @@ export async function runNarratorLoop(opts: LoopOptions): Promise<TurnResult> {
 
       if (name === "present_forks") {
         forks = (args.forks as Fork[]) ?? [];
+        const result = { ok: true };
+        toolCalls.push({ name, args, result });
+        onToolCall?.(name, args, result);
+        messages.push({
+          role: "tool",
+          content: JSON.stringify(result),
+          tool_call_id: tc.id,
+        });
+        continue;
+      }
+
+      if (name === "reply") {
+        const text = args.text as string;
+        if (text) {
+          reply = reply ? `${reply}\n\n${text}` : text;
+          replyCalled = true;
+        }
         const result = { ok: true };
         toolCalls.push({ name, args, result });
         onToolCall?.(name, args, result);
@@ -202,7 +225,8 @@ export async function runNarratorLoop(opts: LoopOptions): Promise<TurnResult> {
       toolCalls,
       totalTokensIn,
       totalTokensOut,
-      totalCost: 0,
+      totalCost,
+      cachedTokens,
       model,
       iterations: maxIterations,
       error: "max iterations reached without done",
@@ -217,19 +241,21 @@ export async function runNarratorLoop(opts: LoopOptions): Promise<TurnResult> {
       toolCalls,
       totalTokensIn,
       totalTokensOut,
-      totalCost: 0,
+      totalCost,
+      cachedTokens,
       model,
       iterations: toolCalls.length,
       error: "done called without reply",
     };
   }
 
-  // Nudge: if we have a reply but no forks, ask the model to provide choices.
-  // This catches models that put prose in content without calling present_forks.
+  // Nudge: if we have a reply but no forks, force the model to call present_forks.
   if (reply && forks.length === 0) {
     messages.push({
       role: "user",
-      content: "Good narrative. Now call present_forks with 3-5 player choices, then call done.",
+      content:
+        "You must call the present_forks tool now with 3-5 choices. " +
+        "Do NOT write text — only call the present_forks tool, then call done.",
     });
 
     try {
@@ -239,6 +265,8 @@ export async function runNarratorLoop(opts: LoopOptions): Promise<TurnResult> {
 
       totalTokensIn += nudge.usage.prompt_tokens;
       totalTokensOut += nudge.usage.completion_tokens;
+      totalCost += nudge.usage.cost ?? 0;
+      cachedTokens += nudge.usage.prompt_tokens_details?.cached_tokens ?? 0;
 
       if (nudge.message.tool_calls) {
         for (const tc of nudge.message.tool_calls) {
@@ -259,7 +287,8 @@ export async function runNarratorLoop(opts: LoopOptions): Promise<TurnResult> {
     toolCalls,
     totalTokensIn,
     totalTokensOut,
-    totalCost: 0,
+    totalCost,
+    cachedTokens,
     model,
     iterations: toolCalls.length,
   };
