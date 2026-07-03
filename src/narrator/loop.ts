@@ -249,6 +249,55 @@ export async function runNarratorLoop(opts: LoopOptions): Promise<TurnResult> {
     };
   }
 
+  // Nudge: if mechanical tools fired but no state updates, ask the model to persist changes.
+  const mechanicalTools = ["request_roll", "request_damage", "start_combat", "end_combat", "enemy_action"];
+  const stateTools = ["update_character", "update_world"];
+  const calledMechanical = toolCalls.some((tc) => mechanicalTools.includes(tc.name));
+  const calledState = toolCalls.some((tc) => stateTools.includes(tc.name));
+
+  if (calledMechanical && !calledState) {
+    const rollSummary = toolCalls
+      .filter((tc) => mechanicalTools.includes(tc.name))
+      .map((tc) => `${tc.name}: ${JSON.stringify(tc.result)}`)
+      .join("\n");
+
+    messages.push({
+      role: "user",
+      content:
+        "Rolls and combat actions happened this turn but you did not call " +
+        "update_character or update_world. You MUST persist state changes now.\n\n" +
+        "Call update_character if HP, ki, inventory, or resources changed.\n" +
+        "Call update_world to set the current_scene description and any flags or NPCs.\n\n" +
+        "Here are the mechanical results from this turn:\n" + rollSummary,
+    });
+
+    try {
+      const stateNudge = stream
+        ? await client.chatStream(messages, tools)
+        : await client.chat(messages, tools);
+
+      totalTokensIn += stateNudge.usage.prompt_tokens;
+      totalTokensOut += stateNudge.usage.completion_tokens;
+      totalCost += stateNudge.usage.cost ?? 0;
+      cachedTokens += stateNudge.usage.prompt_tokens_details?.cached_tokens ?? 0;
+
+      if (stateNudge.message.tool_calls) {
+        for (const tc of stateNudge.message.tool_calls) {
+          const name = tc.function.name;
+          if (!stateTools.includes(name)) continue;
+          const handler = handlers[name];
+          if (!handler) continue;
+          try {
+            const args = JSON.parse(tc.function.arguments) as Record<string, unknown>;
+            const result = await handler(args);
+            toolCalls.push({ name, args, result });
+            onToolCall?.(name, args, result);
+          } catch { /* state nudge handler error, continue */ }
+        }
+      }
+    } catch { /* state nudge failed, continue */ }
+  }
+
   // Nudge: if we have a reply but no forks, force the model to call present_forks.
   if (reply && forks.length === 0) {
     messages.push({
