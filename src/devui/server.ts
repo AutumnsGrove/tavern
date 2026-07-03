@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
-import { createServer } from "node:http";
+import { createServer as createHttpServer } from "node:http";
 import { readFileSync, existsSync } from "node:fs";
-import { join, extname } from "node:path";
+import { join } from "node:path";
 import { WebSocketServer } from "ws";
 import { createLocalD1 } from "../cli/local-d1";
 import { createLocalKV } from "../cli/local-kv";
@@ -17,7 +17,6 @@ import { WebAdapter } from "./adapter";
 
 const PORT = 7777;
 const DB_PATH = join(import.meta.dirname, "../../tavern.db");
-const PUBLIC_DIR = join(import.meta.dirname, "public");
 const CHAT_ID = "devui";
 
 let sessionCost = 0;
@@ -33,16 +32,6 @@ function loadApiKey(): string {
   if (process.env.OPENROUTER_API_KEY) return process.env.OPENROUTER_API_KEY;
   return "";
 }
-
-const MIME: Record<string, string> = {
-  ".html": "text/html",
-  ".css": "text/css",
-  ".js": "application/javascript",
-  ".json": "application/json",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".ico": "image/x-icon",
-};
 
 async function main() {
   const apiKey = loadApiKey();
@@ -76,30 +65,28 @@ async function main() {
 
   const deps: DispatchDeps = { store, srd, commands, apiKey };
 
-  // ── HTTP server for static files ─────────────────────────────
-  const server = createServer((req, res) => {
-    const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
-    let filePath = join(PUBLIC_DIR, url.pathname === "/" ? "index.html" : url.pathname);
-
-    if (!existsSync(filePath)) {
-      res.writeHead(404);
-      res.end("not found");
-      return;
-    }
-
-    const ext = extname(filePath);
-    res.writeHead(200, { "Content-Type": MIME[ext] ?? "application/octet-stream" });
-    res.end(readFileSync(filePath));
+  // ── Vite dev middleware ──────────────────────────────────────
+  const { createServer: createViteServer } = await import("vite");
+  const vite = await createViteServer({
+    root: import.meta.dirname,
+    server: { middlewareMode: true, hmr: { server: undefined as unknown as ReturnType<typeof createHttpServer> } },
+    appType: "spa",
   });
 
-  // ── WebSocket ────────────────────────────────────────────────
-  const wss = new WebSocketServer({ server });
+  const server = createHttpServer((req, res) => {
+    vite.middlewares(req, res);
+  });
+
+  // Wire Vite HMR WebSocket to our HTTP server
+  vite.config.server.hmr = { server };
+
+  // ── Game WebSocket ──────────────────────────────────────────
+  const wss = new WebSocketServer({ server, path: "/ws" });
 
   wss.on("connection", async (ws) => {
     adapter.attach(ws);
     console.log("  ↳ client connected");
 
-    // Send chat history + panel data on connect
     await pushChatHistory(store, adapter);
     await pushPanelData(store, srd, adapter);
 
@@ -125,7 +112,7 @@ async function main() {
           await handleInput(text, deps, adapter, apiKey);
         }
       } else if (payload.type === "panel_request") {
-        await pushPanelData(deps.store, deps.srd, adapter);
+        await pushPanelData(store, srd, adapter);
       }
     });
 
@@ -149,7 +136,6 @@ async function handleInput(
   const settings = await deps.store.getSettings(CHAT_ID);
   const tracesEnabled = !!(settings.traces_enabled ?? config.defaultTracesEnabled);
 
-  // For non-command, non-onboarding input, set up streaming
   const isCommand = text.startsWith("/");
   const isStreaming = !isCommand;
 
@@ -166,7 +152,6 @@ async function handleInput(
     stopTyping();
 
     if (result.kind === "narrative") {
-      // Use real cost from API, fall back to estimate
       let turnCost = result.cost ?? 0;
       if (turnCost === 0) {
         const model = settings.model || config.defaultModel;
@@ -186,14 +171,12 @@ async function handleInput(
       adapter.emit({ type: "stream_end", text: result.text, forks: result.forks });
       adapter.emit({ type: "session_stats", cost: sessionCost, turns: sessionTurns });
 
-      // Auto-push panel data after narrative turns
       pushPanelData(deps.store, deps.srd, adapter).catch(() => {});
 
       if (result.error) {
         await adapter.send(CHAT_ID, { text: result.error, isError: true });
       }
     } else {
-      // Command, onboarding, or error — send as regular message
       if (isStreaming) adapter.emit({ type: "stream_end", text: "", forks: [] });
       await adapter.send(CHAT_ID, {
         text: result.text,
@@ -201,12 +184,10 @@ async function handleInput(
         isError: result.kind === "error",
       });
 
-      // Push panel data after commands too (e.g. /new, /rest change state)
       if (result.kind === "command" || result.kind === "onboarding") {
         pushPanelData(deps.store, deps.srd, adapter).catch(() => {});
       }
 
-      // Reload chat history after state-changing commands
       if (result.kind === "command") {
         pushChatHistory(deps.store, adapter).catch(() => {});
       }

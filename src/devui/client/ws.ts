@@ -9,8 +9,7 @@ import { updatePanelData } from "./panel.js";
 
 export function connect(): void {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  const wsPath = location.port === "7778" ? "/ws" : "";
-  state.ws = new WebSocket(`${proto}//${location.host}${wsPath}`);
+  state.ws = new WebSocket(`${proto}//${location.host}/ws`);
 
   state.ws.onopen = () => {
     statusDot.classList.add("connected");

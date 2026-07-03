@@ -645,7 +645,7 @@ let pendingTraceLines = [];
 // ── WebSocket ──────────────────────────────────────────
 function connect() {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  ws = new WebSocket(`${proto}//${location.host}`);
+  ws = new WebSocket(`${proto}//${location.host}/ws`);
 
   ws.onopen = () => {
     statusDot.classList.add("connected");
