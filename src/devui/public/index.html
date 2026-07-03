@@ -4,62 +4,76 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tavern — Dev UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@600&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0e1117;
-    --surface: #161b22;
-    --surface2: #1c2333;
-    --border: #30363d;
-    --text: #e6edf3;
-    --text-dim: #8b949e;
-    --accent: #c9a04e;
-    --accent-dim: #8b6914;
-    --dm: #1a2332;
-    --player: #1e2a1e;
-    --error: #f85149;
-    --trace-bg: #1a1a2e;
-    --trace-text: #a8a8d0;
-    --typing-dot: #c9a04e;
-    --keyboard-bg: #21262d;
-    --keyboard-hover: #30363d;
+    --deep-oak: #1a1410;
+    --aged-leather: #241e17;
+    --worn-surface: #2c2419;
+    --smoke-border: #3d3428;
+    --parchment-text: #e8dcc8;
+    --faded-ink: #9b8e7a;
+    --hearth-amber: #c9944a;
+    --ember-red: #c45a4a;
+    --sage-green: #5a7a5e;
+    --dm-shadow: #1e1912;
+    --player-shadow: #1a2218;
+    --trace-violet: #2a2435;
+    --trace-text: #a89cbd;
     --radius: 12px;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: var(--bg);
-    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 400;
+    background: var(--deep-oak);
+    color: var(--parchment-text);
     height: 100dvh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    font-size: 14px;
+    line-height: 1.6;
   }
 
   /* ── Header ──────────────────────────────────────────── */
   header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 12px 16px;
+    background: var(--aged-leather);
+    border-bottom: 1px solid var(--smoke-border);
+    padding: 14px 20px;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 16px;
     flex-shrink: 0;
   }
 
-  header h1 { font-size: 16px; font-weight: 600; color: var(--accent); }
+  header h1 {
+    font-family: 'Crimson Pro', serif;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--hearth-amber);
+    letter-spacing: 0.01em;
+  }
 
   .session-stats {
     font-size: 11px;
-    color: var(--text-dim);
-    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-weight: 400;
+    color: var(--faded-ink);
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    border-left: 1px solid var(--smoke-border);
+    padding-left: 16px;
   }
 
   header .status {
     margin-left: auto;
-    font-size: 12px;
-    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--faded-ink);
     display: flex;
     align-items: center;
     gap: 6px;
@@ -67,57 +81,70 @@
 
   header .status .dot {
     width: 8px; height: 8px; border-radius: 50%;
-    background: #f85149; transition: background 0.3s;
+    background: var(--ember-red); transition: background 0.3s;
   }
-  header .status .dot.connected { background: #3fb950; }
+  header .status .dot.connected { background: var(--sage-green); }
 
   /* ── Messages ────────────────────────────────────────── */
   #messages {
     flex: 1;
     overflow-y: auto;
-    padding: 16px;
+    padding: 20px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     scroll-behavior: smooth;
   }
 
   .msg {
     max-width: 80%;
-    padding: 10px 14px;
+    padding: 12px 16px;
     border-radius: var(--radius);
-    line-height: 1.55;
+    line-height: 1.6;
     font-size: 14px;
     word-wrap: break-word;
     animation: fadeIn 0.2s ease;
   }
 
-  .msg p { margin: 0 0 0.5em 0; }
+  .msg p { margin: 0 0 0.5em 0; max-width: 65ch; }
   .msg p:last-child { margin-bottom: 0; }
-  .msg strong { color: var(--accent); font-weight: 600; }
-  .msg em { font-style: italic; color: #c4cad4; }
+
+  .msg strong {
+    color: var(--hearth-amber);
+    font-family: 'Crimson Pro', serif;
+    font-weight: 600;
+  }
+  .msg em { font-style: italic; color: #d4cabb; }
+
   .msg blockquote {
-    border-left: 3px solid var(--accent-dim);
-    padding: 4px 10px;
+    background: rgba(155, 142, 122, 0.08);
+    padding: 8px 14px;
+    border-radius: 6px;
     margin: 6px 0;
-    color: var(--text-dim);
+    color: var(--faded-ink);
     font-style: italic;
   }
+
   .msg ul, .msg ol { padding-left: 1.3em; margin: 4px 0; }
   .msg li { margin: 2px 0; }
+
   .msg h1, .msg h2, .msg h3 {
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--accent);
+    font-family: 'Crimson Pro', serif;
+    font-weight: 600;
+    color: var(--hearth-amber);
     margin: 8px 0 4px 0;
   }
-  .msg h1 { font-size: 16px; }
-  .msg hr { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+  .msg h1 { font-size: 18px; }
+  .msg h2 { font-size: 16px; }
+  .msg h3 { font-size: 14px; }
+
+  .msg hr { border: none; border-top: 1px solid var(--smoke-border); margin: 8px 0; }
+
   .msg code {
-    background: var(--surface2);
+    background: var(--aged-leather);
     padding: 1px 5px;
     border-radius: 4px;
-    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
     font-size: 12px;
   }
 
@@ -128,28 +155,28 @@
 
   .msg.dm {
     align-self: flex-start;
-    background: var(--dm);
+    background: var(--dm-shadow);
     border-bottom-left-radius: 4px;
   }
 
   .msg.player {
     align-self: flex-end;
-    background: var(--player);
+    background: var(--player-shadow);
     border-bottom-right-radius: 4px;
   }
 
   .msg.error {
     align-self: flex-start;
-    background: #2d1b1b;
-    border: 1px solid var(--error);
-    color: #ffa198;
+    background: #2d1c18;
+    border: 1px solid var(--ember-red);
+    color: #e8a298;
     border-bottom-left-radius: 4px;
   }
 
   .msg.system {
     align-self: center;
     background: transparent;
-    color: var(--text-dim);
+    color: var(--faded-ink);
     font-size: 13px;
     text-align: center;
     padding: 4px 12px;
@@ -159,21 +186,21 @@
   /* ── Inline Trace Bubble ────────────────────────────── */
   .msg.trace {
     align-self: flex-start;
-    background: var(--trace-bg);
+    background: var(--trace-violet);
+    border: 1px solid rgba(168, 156, 189, 0.12);
     color: var(--trace-text);
-    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
     font-size: 11px;
     line-height: 1.5;
     padding: 8px 12px;
     max-width: 90%;
     border-bottom-left-radius: 4px;
-    border-left: 3px solid var(--accent-dim);
   }
 
-  /* ── Inline Keyboard ────────────────────────────────── */
+  /* ── Inline Keyboard (Fork Buttons) ─────────────────── */
   .keyboard {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 6px;
     margin-top: 8px;
     max-width: 80%;
@@ -182,24 +209,33 @@
   }
 
   .keyboard button {
-    background: var(--keyboard-bg);
-    color: var(--accent);
-    border: 1px solid var(--border);
+    background: var(--worn-surface);
+    color: var(--hearth-amber);
+    border: none;
     border-radius: 8px;
-    padding: 8px 14px;
+    padding: 10px 16px;
     font-size: 13px;
     cursor: pointer;
-    transition: all 0.15s;
-    font-family: inherit;
+    transition: background 0.15s;
+    font-family: 'Inter', inherit;
+    text-align: left;
+    width: 100%;
   }
 
   .keyboard button:hover {
-    background: var(--keyboard-hover);
-    border-color: var(--accent-dim);
+    background: var(--smoke-border);
   }
 
-  .keyboard button:active { transform: scale(0.97); }
-  .keyboard button.other { color: var(--text-dim); border-style: dashed; }
+  .keyboard button:active { transform: scale(0.98); }
+
+  .keyboard button.other {
+    color: var(--faded-ink);
+    border: 1px dashed var(--smoke-border);
+    background: transparent;
+  }
+  .keyboard button.other:hover {
+    background: var(--worn-surface);
+  }
 
   /* ── Typing Indicator ───────────────────────────────── */
   .typing {
@@ -207,31 +243,33 @@
     display: none;
     gap: 4px;
     padding: 12px 18px;
-    background: var(--dm);
+    background: var(--dm-shadow);
     border-radius: var(--radius);
     border-bottom-left-radius: 4px;
+    margin: 0 20px;
   }
 
   .typing.active { display: flex; }
 
   .typing span {
     width: 7px; height: 7px; border-radius: 50%;
-    background: var(--typing-dot);
+    background: var(--hearth-amber);
     animation: bounce 1.4s ease-in-out infinite;
   }
-  .typing span:nth-child(2) { animation-delay: 0.2s; }
-  .typing span:nth-child(3) { animation-delay: 0.4s; }
+  .typing span:nth-child(1) { opacity: 0.5; }
+  .typing span:nth-child(2) { animation-delay: 0.2s; opacity: 0.7; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; opacity: 0.9; }
 
   @keyframes bounce {
-    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    0%, 60%, 100% { transform: translateY(0); opacity: var(--dot-opacity, 0.4); }
     30% { transform: translateY(-6px); opacity: 1; }
   }
 
   /* ── Input Bar ──────────────────────────────────────── */
   #input-bar {
-    background: var(--surface);
-    border-top: 1px solid var(--border);
-    padding: 10px 16px;
+    background: var(--aged-leather);
+    border-top: 1px solid var(--smoke-border);
+    padding: 12px 16px;
     display: flex;
     align-items: flex-end;
     gap: 8px;
@@ -240,12 +278,12 @@
 
   #input-bar textarea {
     flex: 1;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    color: var(--text);
+    background: var(--aged-leather);
+    border: 1px solid var(--smoke-border);
+    border-radius: 16px;
+    color: var(--parchment-text);
     font-size: 14px;
-    font-family: inherit;
+    font-family: 'Inter', inherit;
     padding: 10px 16px;
     resize: none;
     max-height: 120px;
@@ -254,52 +292,52 @@
     transition: border-color 0.2s;
   }
 
-  #input-bar textarea:focus { border-color: var(--accent-dim); }
-  #input-bar textarea::placeholder { color: var(--text-dim); }
+  #input-bar textarea:focus { border-color: rgba(201, 148, 74, 0.5); }
+  #input-bar textarea::placeholder { color: var(--faded-ink); }
 
   #input-bar button {
     width: 40px; height: 40px; border-radius: 50%;
     border: none; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0; transition: all 0.15s;
+    flex-shrink: 0; transition: background 0.15s;
   }
 
-  #send-btn { background: var(--accent); color: var(--bg); }
+  #send-btn { background: var(--hearth-amber); color: var(--deep-oak); }
   #send-btn:hover { filter: brightness(1.1); }
   #send-btn:disabled { opacity: 0.3; cursor: default; }
 
   #voice-btn {
-    background: var(--surface2);
-    border: 1px solid var(--border) !important;
-    color: var(--text-dim);
+    background: var(--worn-surface);
+    border: 1px solid var(--smoke-border) !important;
+    color: var(--faded-ink);
   }
-  #voice-btn:hover { background: var(--keyboard-hover); }
-  #voice-btn.recording { background: #f8514933; color: var(--error); border-color: var(--error) !important; }
+  #voice-btn:hover { background: var(--smoke-border); }
+  #voice-btn.recording { background: rgba(196, 90, 74, 0.2); color: var(--ember-red); border-color: var(--ember-red) !important; }
 
   /* ── Command Autocomplete ───────────────────────────── */
   #autocomplete {
     position: absolute; bottom: 100%; left: 16px; right: 16px;
-    background: var(--surface2); border: 1px solid var(--border);
+    background: var(--worn-surface); border: 1px solid var(--smoke-border);
     border-radius: 8px; display: none; overflow: hidden; margin-bottom: 4px;
   }
   #autocomplete.open { display: block; }
   #autocomplete .item { padding: 8px 14px; cursor: pointer; font-size: 13px; display: flex; gap: 8px; }
-  #autocomplete .item:hover, #autocomplete .item.selected { background: var(--keyboard-hover); }
-  #autocomplete .item .cmd { color: var(--accent); font-weight: 600; }
-  #autocomplete .item .desc { color: var(--text-dim); }
+  #autocomplete .item:hover, #autocomplete .item.selected { background: var(--smoke-border); }
+  #autocomplete .item .cmd { color: var(--hearth-amber); font-weight: 600; }
+  #autocomplete .item .desc { color: var(--faded-ink); }
   #input-wrapper { position: relative; flex: 1; }
 
   /* ── Scrollbar ──────────────────────────────────────── */
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+  ::-webkit-scrollbar-thumb { background: var(--smoke-border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--faded-ink); }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>🍺 Tavern</h1>
+  <h1>Tavern</h1>
   <span class="session-stats" id="session-stats"></span>
   <div class="status">
     <div class="dot" id="status-dot"></div>
