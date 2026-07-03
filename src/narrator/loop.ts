@@ -7,6 +7,7 @@
 import type { ChatMessage, ToolCall, CompletionResult } from "./client";
 import type { NarratorClient } from "./client";
 import type { ToolDef } from "./client";
+import { worldNudge, characterNudge, stateNudge, forksNudge, sceneNudge } from "./prompts/nudges";
 
 export interface Fork {
   label: string;
@@ -43,6 +44,7 @@ export interface LoopOptions {
   messages: ChatMessage[];
   maxIterations?: number;
   stream?: boolean;
+  turnsSinceLastScene?: number;
   onToolCall?: (name: string, args: Record<string, unknown>, result: unknown) => void;
   onContentDelta?: (delta: string) => void;
 }
@@ -263,23 +265,12 @@ export async function runNarratorLoop(opts: LoopOptions): Promise<TurnResult> {
 
   if (needsWorldNudge || needsCharNudge) {
     const parts: string[] = [];
-    if (needsWorldNudge) {
-      parts.push(
-        "Call update_world now. Set current_scene to a 1-2 sentence description " +
-        "of where the player is RIGHT NOW and what's happening. Also set any " +
-        "flags or NPCs that changed."
-      );
-    }
-    if (needsCharNudge) {
-      parts.push(
-        "Call update_character if HP, ki, inventory, or resources changed this turn."
-      );
-    }
+    if (needsWorldNudge) parts.push(worldNudge());
+    if (needsCharNudge) parts.push(characterNudge());
 
     messages.push({
       role: "user",
-      content: "You MUST persist state before finishing. " + parts.join("\n\n") +
-        "\n\nCall ONLY state update tools. Do NOT write text.",
+      content: stateNudge(parts),
     });
 
     try {
@@ -313,9 +304,7 @@ export async function runNarratorLoop(opts: LoopOptions): Promise<TurnResult> {
   if (reply && forks.length === 0) {
     messages.push({
       role: "user",
-      content:
-        "You must call the present_forks tool now with 3-5 choices. " +
-        "Do NOT write text — only call the present_forks tool, then call done.",
+      content: forksNudge(),
     });
 
     try {
@@ -339,6 +328,45 @@ export async function runNarratorLoop(opts: LoopOptions): Promise<TurnResult> {
         }
       }
     } catch { /* nudge failed, continue without forks */ }
+  }
+
+  // Nudge: suggest end_scene at natural narrative breaks (every 5+ turns without one).
+  const { turnsSinceLastScene = 0 } = opts;
+  const calledEndScene = toolCalls.some((tc) => tc.name === "end_scene");
+  const SCENE_NUDGE_THRESHOLD = 5;
+
+  if (turnsSinceLastScene >= SCENE_NUDGE_THRESHOLD && !calledEndScene && reply) {
+    messages.push({
+      role: "user",
+      content: sceneNudge(turnsSinceLastScene),
+    });
+
+    try {
+      const scNudge = stream
+        ? await client.chatStream(messages, tools)
+        : await client.chat(messages, tools);
+
+      totalTokensIn += scNudge.usage.prompt_tokens;
+      totalTokensOut += scNudge.usage.completion_tokens;
+      totalCost += scNudge.usage.cost ?? 0;
+      cachedTokens += scNudge.usage.prompt_tokens_details?.cached_tokens ?? 0;
+
+      if (scNudge.message.tool_calls) {
+        for (const tc of scNudge.message.tool_calls) {
+          if (tc.function.name === "end_scene") {
+            const handler = handlers["end_scene"];
+            if (handler) {
+              try {
+                const args = JSON.parse(tc.function.arguments) as Record<string, unknown>;
+                const result = await handler(args);
+                toolCalls.push({ name: "end_scene", args, result });
+                onToolCall?.("end_scene", args, result);
+              } catch { /* scene nudge handler error */ }
+            }
+          }
+        }
+      }
+    } catch { /* scene nudge failed, continue */ }
   }
 
   return {

@@ -227,12 +227,17 @@ export async function handleTurn(deps: TurnDeps, input: TurnInput, callbacks?: T
   const inCombat = !!(combat && combat.state === "active");
   const activeTools = getActiveTools(inCombat);
 
+  // Estimate turns since last scene for the scene nudge
+  const lastSceneSeq = scenes.length > 0 ? scenes[scenes.length - 1]!.seq : 0;
+  const turnsSinceLastScene = Math.floor((messageCount - lastSceneSeq) / 2);
+
   const result = await runNarratorLoop({
     client,
     tools: activeTools,
     handlers,
     messages,
     maxIterations: config.maxToolIterations,
+    turnsSinceLastScene,
     stream: callbacks?.stream ?? false,
     onContentDelta: callbacks?.onContentDelta,
     onToolCall: (name, args, resultData) => {
