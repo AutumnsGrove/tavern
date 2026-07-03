@@ -254,7 +254,47 @@ async function runSuite(
     const turnStart = Date.now();
     console.log(`  Turn ${i + 1}: "${text.slice(0, 60)}${text.length > 60 ? "..." : ""}"`);
 
-    const result = await dispatch(deps, CHAT_ID, text);
+    const result = await dispatch(deps, CHAT_ID, text, {
+      onToolCall: (name, args, resultData) => {
+        const icon = toolIcon(name);
+        const r = resultData as Record<string, unknown>;
+        if (name === "think") {
+          const thought = String(args.text ?? "").slice(0, 80);
+          console.log(`           ${icon} ${thought}${String(args.text ?? "").length > 80 ? "..." : ""}`);
+        } else if (name === "reply") {
+          const preview = String(args.text ?? "").slice(0, 70);
+          console.log(`           ${icon} ${preview}${String(args.text ?? "").length > 70 ? "..." : ""}`);
+        } else if (name === "request_roll") {
+          const success = r.success === true ? " ✅" : r.success === false ? " ❌" : "";
+          console.log(`           ${icon} ${r.reason}: nat ${r.nat} + ${r.modifier} = ${r.total}${r.dc !== undefined ? ` vs DC ${r.dc}` : ""}${success}`);
+        } else if (name === "request_damage") {
+          console.log(`           ${icon} ${r.reason}: ${r.total} damage`);
+        } else if (name === "present_forks") {
+          const forks = (args.forks as Array<{ label: string }>) ?? [];
+          console.log(`           ${icon} [${forks.map((f) => f.label).join(" | ")}]`);
+        } else if (name === "update_world") {
+          const scene = String(args.current_scene ?? "").slice(0, 60);
+          console.log(`           ${icon} scene: ${scene}${String(args.current_scene ?? "").length > 60 ? "..." : ""}`);
+        } else if (name === "update_character") {
+          const parts: string[] = [];
+          if (args.hp_change !== undefined) parts.push(`hp: ${args.hp_change}`);
+          if (args.add_items) parts.push(`+items`);
+          if (args.remove_items) parts.push(`-items`);
+          if (args.spend_resource) parts.push(`spend`);
+          console.log(`           ${icon} ${parts.join(", ") || "update"}`);
+        } else if (name === "end_scene") {
+          console.log(`           ${icon} scene end: ${String(args.summary ?? "").slice(0, 60)}`);
+        } else if (name === "start_combat") {
+          console.log(`           ${icon} combat started`);
+        } else if (name === "enemy_action") {
+          console.log(`           ${icon} ${args.enemy}: ${args.action}`);
+        } else if (name === "done") {
+          // silent
+        } else {
+          console.log(`           ${icon} ${name}`);
+        }
+      },
+    });
 
     const turnDuration = Date.now() - turnStart;
 
@@ -346,6 +386,27 @@ async function runSuite(
     model,
     timestamp: new Date(),
   };
+}
+
+function toolIcon(name: string): string {
+  switch (name) {
+    case "think": return "🧠";
+    case "reply": return "📝";
+    case "done": return "✅";
+    case "request_roll": return "🎲";
+    case "request_damage": return "💥";
+    case "present_forks": return "🔀";
+    case "update_character": return "📊";
+    case "update_world": return "🌍";
+    case "get_character": return "📋";
+    case "get_world": return "🗺️";
+    case "lookup_rule": return "📖";
+    case "start_combat": return "⚔️";
+    case "end_combat": return "🏳️";
+    case "enemy_action": return "👹";
+    case "end_scene": return "📜";
+    default: return "🔧";
+  }
 }
 
 async function main() {

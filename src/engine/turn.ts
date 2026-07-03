@@ -52,6 +52,7 @@ export interface TurnInput {
 export interface TurnCallbacks {
   onContentDelta?: (delta: string) => void;
   onTrace?: (line: string) => void;
+  onToolCall?: (name: string, args: Record<string, unknown>, result: unknown) => void;
   stream?: boolean;
 }
 
@@ -253,6 +254,7 @@ export async function handleTurn(deps: TurnDeps, input: TurnInput, callbacks?: T
           trace.add("rolls", `🎲 ${r.reason}: ${r.rolls} + ${r.modifier} = ${r.total} damage`);
         }
       }
+      callbacks?.onToolCall?.(name, args, resultData);
     },
   });
 

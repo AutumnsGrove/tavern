@@ -1,0 +1,55 @@
+name: "Tavern to Road — Scene Transition"
+description: "8-turn session that starts in a tavern, gathers info, then heads out on the road. Tests scene transitions, end_scene calls, roll compliance on social/perception checks, and state persistence across location changes."
+tags: ["scene", "compaction", "social", "extended"]
+
+character:
+  name: "Sayola"
+  race: "Tiefling"
+  class: "Monk"
+  subclass: "Way of the Open Hand"
+  level: 5
+  stats:
+    str: 10
+    dex: 18
+    con: 14
+    int: 12
+    wis: 16
+    cha: 8
+  skill_proficiencies: ["stealth", "acrobatics", "insight", "perception"]
+  save_proficiencies: ["str", "dex"]
+  inventory:
+    - name: "Quarterstaff"
+      category: "weapon"
+    - name: "Darts"
+      qty: 10
+      category: "weapon"
+    - name: "Waterskin"
+      category: "gear"
+    - name: "Rations"
+      qty: 5
+      category: "gear"
+    - name: "Gold pieces"
+      qty: 15
+      category: "currency"
+
+scenario: |
+  You sit in a corner booth of The Rusty Anchor, a dockside tavern in
+  the port town of Saltmere. Rain hammers the windows. A fire crackles
+  in the hearth. The barkeep, a one-armed woman named Brenna, polishes
+  glasses behind the counter. A hooded figure at the bar has been
+  watching you for the last ten minutes.
+
+messages:
+  - "I use my insight to read the hooded figure. What's their deal?"
+  - "I approach them and ask what they want."
+  - "I try to persuade them to tell me more about who sent them and why."
+  - text: "pick_fork"
+    pick_fork: 1
+  - "Alright, I'll take the job. But I want to know everything about the road to Ashwick before I leave."
+  - "I buy supplies from Brenna, finish my drink, and head out of the tavern toward the north road."
+  - "As I walk along the road, I keep my eyes open for anything unusual."
+  - text: "pick_fork"
+    pick_fork: 2
+
+settings:
+  narration_mode: "concise"

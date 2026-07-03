@@ -25,6 +25,7 @@ export interface DispatchCallbacks {
   stream?: boolean;
   onContentDelta?: (delta: string) => void;
   onTrace?: (line: string) => void;
+  onToolCall?: (name: string, args: Record<string, unknown>, result: unknown) => void;
 }
 
 export interface ToolCallRecord {
@@ -142,6 +143,7 @@ async function handleGameInput(
       stream: callbacks?.stream,
       onContentDelta: callbacks?.onContentDelta,
       onTrace: callbacks?.onTrace,
+      onToolCall: callbacks?.onToolCall,
     },
   );
 
