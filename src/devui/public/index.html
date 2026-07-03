@@ -70,6 +70,7 @@
 
   header .status {
     margin-left: auto;
+    margin-right: 40px;
     font-size: 11px;
     font-weight: 500;
     letter-spacing: 0.02em;
@@ -85,6 +86,20 @@
   }
   header .status .dot.connected { background: var(--sage-green); }
 
+  /* ── Main Area (chat + side panel) ────────────────────── */
+  #main-area {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  #chat-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
   /* ── Messages ────────────────────────────────────────── */
   #messages {
     flex: 1;
@@ -95,6 +110,109 @@
     gap: 10px;
     scroll-behavior: smooth;
   }
+
+  /* ── Side Panel ─────────────────────────────────────── */
+  #side-panel {
+    width: 320px;
+    flex-shrink: 0;
+    background: var(--aged-leather);
+    border-left: 1px solid var(--smoke-border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.2s;
+  }
+
+  #side-panel.collapsed {
+    width: 0;
+    opacity: 0;
+    border-left: none;
+  }
+
+  #panel-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--smoke-border);
+    flex-shrink: 0;
+  }
+
+  .panel-tab {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--faded-ink);
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    padding: 12px 8px;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+    text-transform: uppercase;
+  }
+
+  .panel-tab:hover { color: var(--parchment-text); }
+  .panel-tab.active {
+    color: var(--hearth-amber);
+    background: rgba(201, 148, 74, 0.06);
+  }
+
+  #panel-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--parchment-text);
+  }
+
+  #panel-content p { margin: 0 0 0.4em 0; }
+  #panel-content p:last-child { margin-bottom: 0; }
+  #panel-content strong {
+    color: var(--hearth-amber);
+    font-family: 'Crimson Pro', serif;
+    font-weight: 600;
+  }
+  #panel-content em { color: #d4cabb; font-style: italic; }
+  #panel-content ul, #panel-content ol { padding-left: 1.2em; margin: 4px 0; }
+  #panel-content li { margin: 2px 0; }
+  #panel-content hr { border: none; border-top: 1px solid var(--smoke-border); margin: 10px 0; }
+  #panel-content h1, #panel-content h2, #panel-content h3 {
+    font-family: 'Crimson Pro', serif;
+    font-weight: 600;
+    color: var(--hearth-amber);
+    margin: 10px 0 4px 0;
+  }
+  #panel-content h1 { font-size: 16px; }
+  #panel-content h2 { font-size: 14px; }
+  #panel-content h3 { font-size: 13px; }
+
+  .panel-empty {
+    color: var(--faded-ink);
+    text-align: center;
+    padding: 40px 20px;
+    font-style: italic;
+  }
+
+  /* ── Panel Toggle Button ───────────────────────────── */
+  #panel-toggle {
+    position: fixed;
+    top: 14px;
+    right: 16px;
+    z-index: 10;
+    width: 32px; height: 32px;
+    background: var(--worn-surface);
+    border: 1px solid var(--smoke-border);
+    border-radius: 6px;
+    color: var(--faded-ink);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s, background 0.15s;
+  }
+  #panel-toggle:hover { color: var(--hearth-amber); background: var(--smoke-border); }
+  #panel-toggle.active { color: var(--hearth-amber); }
 
   .msg {
     max-width: 80%;
@@ -277,7 +395,7 @@
   }
 
   #input-bar textarea {
-    flex: 1;
+    width: 100%;
     background: var(--aged-leather);
     border: 1px solid var(--smoke-border);
     border-radius: 16px;
@@ -345,13 +463,33 @@
   </div>
 </header>
 
-<div id="messages">
-  <div class="msg system">Type /new to start a campaign, or /help for commands.</div>
+<div id="main-area">
+  <div id="chat-col">
+    <div id="messages">
+      <div class="msg system">Type /new to start a campaign, or /help for commands.</div>
+    </div>
+
+    <div class="typing" id="typing">
+      <span></span><span></span><span></span>
+    </div>
+  </div>
+
+  <aside id="side-panel" class="collapsed">
+    <div id="panel-tabs">
+      <button class="panel-tab active" data-panel="sheet">Sheet</button>
+      <button class="panel-tab" data-panel="inventory">Inventory</button>
+      <button class="panel-tab" data-panel="world">World</button>
+    </div>
+    <div id="panel-content"></div>
+  </aside>
 </div>
 
-<div class="typing" id="typing">
-  <span></span><span></span><span></span>
-</div>
+<button id="panel-toggle" title="Toggle side panel">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2"/>
+    <line x1="15" y1="3" x2="15" y2="21"/>
+  </svg>
+</button>
 
 <div id="input-bar">
   <button id="voice-btn" title="Hold to record voice">
@@ -572,6 +710,9 @@ function connect() {
         } else {
           typingEl.classList.remove("active");
         }
+        break;
+      case "panel_data":
+        updatePanelData(msg.panels);
         break;
     }
   };
@@ -805,6 +946,45 @@ function stopRecording() {
   isRecording = false;
   voiceBtn.classList.remove("recording");
   mediaRecorder.stop();
+}
+
+// ── Side Panel ────────────────────────────────────────
+const panelToggle = document.getElementById("panel-toggle");
+const sidePanel = document.getElementById("side-panel");
+const panelContent = document.getElementById("panel-content");
+const panelTabs = document.querySelectorAll(".panel-tab");
+let panelData = {};
+let activePanel = "sheet";
+
+panelToggle.addEventListener("click", () => {
+  sidePanel.classList.toggle("collapsed");
+  panelToggle.classList.toggle("active");
+  if (!sidePanel.classList.contains("collapsed") && ws && ws.readyState === 1) {
+    ws.send(JSON.stringify({ type: "panel_request" }));
+  }
+});
+
+panelTabs.forEach(tab => {
+  tab.addEventListener("click", () => {
+    panelTabs.forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    activePanel = tab.dataset.panel;
+    renderPanel();
+  });
+});
+
+function updatePanelData(panels) {
+  panelData = panels || {};
+  renderPanel();
+}
+
+function renderPanel() {
+  const content = panelData[activePanel];
+  if (!content) {
+    panelContent.innerHTML = '<div class="panel-empty">No data yet. Start a campaign with /new.</div>';
+    return;
+  }
+  panelContent.innerHTML = renderMd(content);
 }
 
 // ── Boot ───────────────────────────────────────────────

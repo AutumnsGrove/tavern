@@ -12,6 +12,7 @@ import { registerCommands } from "../commands";
 import { dispatch } from "../gateway/dispatch";
 import type { DispatchDeps } from "../gateway/dispatch";
 import { config } from "../config";
+import { renderCharacterSheet, renderWorldState } from "../state/documents";
 import { WebAdapter } from "./adapter";
 
 const PORT = 7777;
@@ -119,6 +120,8 @@ async function main() {
         if (text) {
           await handleInput(text, deps, adapter, apiKey);
         }
+      } else if (payload.type === "panel_request") {
+        await pushPanelData(deps.store, deps.srd, adapter);
       }
     });
 
@@ -179,6 +182,9 @@ async function handleInput(
       adapter.emit({ type: "stream_end", text: result.text, forks: result.forks });
       adapter.emit({ type: "session_stats", cost: sessionCost, turns: sessionTurns });
 
+      // Auto-push panel data after narrative turns
+      pushPanelData(deps.store, deps.srd, adapter).catch(() => {});
+
       if (result.error) {
         await adapter.send(CHAT_ID, { text: result.error, isError: true });
       }
@@ -190,6 +196,11 @@ async function handleInput(
         forks: result.forks,
         isError: result.kind === "error",
       });
+
+      // Push panel data after commands too (e.g. /new, /rest change state)
+      if (result.kind === "command" || result.kind === "onboarding") {
+        pushPanelData(deps.store, deps.srd, adapter).catch(() => {});
+      }
     }
   } catch (err) {
     stopTyping();
@@ -233,6 +244,48 @@ async function transcribeVoice(
     });
     return "";
   }
+}
+
+async function pushPanelData(
+  store: GameStore,
+  srd: SrdLoader,
+  adapter: WebAdapter,
+): Promise<void> {
+  const save = await store.getActiveSave(CHAT_ID);
+  if (!save) {
+    adapter.emit({ type: "panel_data", panels: {} });
+    return;
+  }
+  const saveId = save.save_id;
+
+  const character = await store.getCharacter(saveId);
+  const inventory = await store.getInventory(saveId);
+  const npcs = await store.getNpcs(saveId);
+  const flags = await store.getFlags(saveId);
+  const scenes = await store.getScenes(saveId);
+  const currentScene = await store.getDocument(saveId, "scene");
+
+  const panels: Record<string, string> = {};
+
+  if (character) {
+    panels.sheet = renderCharacterSheet(character, inventory);
+  }
+
+  if (inventory.length > 0) {
+    const lines = inventory.map((i) => {
+      let line = `- **${i.name}**`;
+      if (i.qty > 1) line += ` (x${i.qty})`;
+      if (i.notes) line += ` — ${i.notes}`;
+      return line;
+    });
+    panels.inventory = lines.join("\n");
+  } else {
+    panels.inventory = "Your pockets are empty.";
+  }
+
+  panels.world = renderWorldState(npcs, flags, scenes, currentScene ?? undefined);
+
+  adapter.emit({ type: "panel_data", panels });
 }
 
 main().catch((err) => {
