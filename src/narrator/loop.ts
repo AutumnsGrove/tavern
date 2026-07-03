@@ -249,26 +249,37 @@ export async function runNarratorLoop(opts: LoopOptions): Promise<TurnResult> {
     };
   }
 
-  // Nudge: if mechanical tools fired but no state updates, ask the model to persist changes.
+  // Nudge: persist state after every narrative turn.
+  // update_world fires ALWAYS (scene description should be current after every turn).
+  // update_character fires only when mechanical tools suggest state changed.
   const mechanicalTools = ["request_roll", "request_damage", "start_combat", "end_combat", "enemy_action"];
   const stateTools = ["update_character", "update_world"];
+  const calledWorld = toolCalls.some((tc) => tc.name === "update_world");
+  const calledChar = toolCalls.some((tc) => tc.name === "update_character");
   const calledMechanical = toolCalls.some((tc) => mechanicalTools.includes(tc.name));
-  const calledState = toolCalls.some((tc) => stateTools.includes(tc.name));
 
-  if (calledMechanical && !calledState) {
-    const rollSummary = toolCalls
-      .filter((tc) => mechanicalTools.includes(tc.name))
-      .map((tc) => `${tc.name}: ${JSON.stringify(tc.result)}`)
-      .join("\n");
+  const needsWorldNudge = !calledWorld;
+  const needsCharNudge = calledMechanical && !calledChar;
+
+  if (needsWorldNudge || needsCharNudge) {
+    const parts: string[] = [];
+    if (needsWorldNudge) {
+      parts.push(
+        "Call update_world now. Set current_scene to a 1-2 sentence description " +
+        "of where the player is RIGHT NOW and what's happening. Also set any " +
+        "flags or NPCs that changed."
+      );
+    }
+    if (needsCharNudge) {
+      parts.push(
+        "Call update_character if HP, ki, inventory, or resources changed this turn."
+      );
+    }
 
     messages.push({
       role: "user",
-      content:
-        "Rolls and combat actions happened this turn but you did not call " +
-        "update_character or update_world. You MUST persist state changes now.\n\n" +
-        "Call update_character if HP, ki, inventory, or resources changed.\n" +
-        "Call update_world to set the current_scene description and any flags or NPCs.\n\n" +
-        "Here are the mechanical results from this turn:\n" + rollSummary,
+      content: "You MUST persist state before finishing. " + parts.join("\n\n") +
+        "\n\nCall ONLY state update tools. Do NOT write text.",
     });
 
     try {

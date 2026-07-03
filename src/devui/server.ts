@@ -95,9 +95,13 @@ async function main() {
   // ── WebSocket ────────────────────────────────────────────────
   const wss = new WebSocketServer({ server });
 
-  wss.on("connection", (ws) => {
+  wss.on("connection", async (ws) => {
     adapter.attach(ws);
     console.log("  ↳ client connected");
+
+    // Send chat history + panel data on connect
+    await pushChatHistory(store, adapter);
+    await pushPanelData(store, srd, adapter);
 
     ws.on("message", async (raw) => {
       let payload: { type: string; text?: string; data?: string; audio?: string };
@@ -201,6 +205,11 @@ async function handleInput(
       if (result.kind === "command" || result.kind === "onboarding") {
         pushPanelData(deps.store, deps.srd, adapter).catch(() => {});
       }
+
+      // Reload chat history after state-changing commands
+      if (result.kind === "command") {
+        pushChatHistory(deps.store, adapter).catch(() => {});
+      }
     }
   } catch (err) {
     stopTyping();
@@ -244,6 +253,27 @@ async function transcribeVoice(
     });
     return "";
   }
+}
+
+async function pushChatHistory(
+  store: GameStore,
+  adapter: WebAdapter,
+): Promise<void> {
+  const save = await store.getActiveSave(CHAT_ID);
+  if (!save) {
+    adapter.emit({ type: "chat_history", messages: [] });
+    return;
+  }
+
+  const messages = await store.getRecentMessages(save.save_id, 50);
+  const history = messages
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    }));
+
+  adapter.emit({ type: "chat_history", messages: history });
 }
 
 async function pushPanelData(

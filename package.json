@@ -12,9 +12,10 @@
     "test:watch": "vitest",
     "srd:seed": "tsx scripts/seed-srd.ts",
     "db:migrate": "wrangler d1 migrations apply tavern-db --local",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p src/devui/tsconfig.client.json",
     "play": "tsx src/cli/play.ts",
     "dev:ui": "tsx src/devui/server.ts",
+    "dev:ui:vite": "vite --config src/devui/vite.config.ts",
     "sim": "tsx src/sim/runner.ts"
   },
   "devDependencies": {
@@ -25,6 +26,7 @@
     "better-sqlite3": "^12.11.1",
     "tsx": "^4.22.4",
     "typescript": "^5.8.0",
+    "vite": "^6.0.0",
     "vitest": "^3.2.0",
     "wrangler": "^4.50.0",
     "yaml": "^2.9.0"

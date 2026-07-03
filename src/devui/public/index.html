@@ -714,11 +714,42 @@ function connect() {
       case "panel_data":
         updatePanelData(msg.panels);
         break;
+      case "chat_history":
+        loadChatHistory(msg.messages);
+        break;
     }
   };
 }
 
 // ── Messages ───────────────────────────────────────────
+function loadChatHistory(messages) {
+  // Clear existing messages except the system welcome
+  const children = Array.from(messagesEl.children);
+  children.forEach(child => {
+    if (!child.classList.contains("system")) child.remove();
+  });
+  // Also remove any leftover keyboards
+  messagesEl.querySelectorAll(".keyboard").forEach(kb => kb.remove());
+
+  if (messages.length === 0) return;
+
+  // Remove the system welcome message since we have history
+  const welcome = messagesEl.querySelector(".msg.system");
+  if (welcome) welcome.remove();
+
+  for (const msg of messages) {
+    const el = document.createElement("div");
+    el.className = msg.role === "user" ? "msg player" : "msg dm";
+    if (msg.role === "user") {
+      el.textContent = msg.content;
+    } else {
+      el.innerHTML = renderMd(msg.content);
+    }
+    messagesEl.appendChild(el);
+  }
+  scrollToBottom();
+}
+
 function addDmMessage(text, forks) {
   typingEl.classList.remove("active");
   const el = document.createElement("div");
