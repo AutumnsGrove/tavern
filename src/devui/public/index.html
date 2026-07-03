@@ -88,9 +88,37 @@
     border-radius: var(--radius);
     line-height: 1.55;
     font-size: 14px;
-    white-space: pre-wrap;
     word-wrap: break-word;
     animation: fadeIn 0.2s ease;
+  }
+
+  .msg p { margin: 0 0 0.5em 0; }
+  .msg p:last-child { margin-bottom: 0; }
+  .msg strong { color: var(--accent); font-weight: 600; }
+  .msg em { font-style: italic; color: #c4cad4; }
+  .msg blockquote {
+    border-left: 3px solid var(--accent-dim);
+    padding: 4px 10px;
+    margin: 6px 0;
+    color: var(--text-dim);
+    font-style: italic;
+  }
+  .msg ul, .msg ol { padding-left: 1.3em; margin: 4px 0; }
+  .msg li { margin: 2px 0; }
+  .msg h1, .msg h2, .msg h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+    margin: 8px 0 4px 0;
+  }
+  .msg h1 { font-size: 16px; }
+  .msg hr { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+  .msg code {
+    background: var(--surface2);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
   }
 
   @keyframes fadeIn {
@@ -325,6 +353,100 @@ const COMMANDS = [
   { cmd: "/traces", desc: "Toggle trace display" },
 ];
 
+// ── Markdown renderer ─────────────────────────────────
+function renderMd(text) {
+  if (!text) return "";
+  // Escape HTML
+  let html = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  // Split into lines for block-level processing
+  const lines = html.split("\n");
+  const out = [];
+  let inList = false;
+  let inBlockquote = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+
+    // Blockquotes
+    if (line.match(/^&gt;\s?/)) {
+      const content = line.replace(/^&gt;\s?/, "");
+      if (!inBlockquote) { out.push("<blockquote>"); inBlockquote = true; }
+      out.push(inlineMarkdown(content));
+      if (i + 1 >= lines.length || !lines[i + 1].match(/^&gt;\s?/)) {
+        out.push("</blockquote>");
+        inBlockquote = false;
+      }
+      continue;
+    }
+
+    // Headings
+    const h3 = line.match(/^###\s+(.+)/);
+    if (h3) { closeList(); out.push("<h3>" + inlineMarkdown(h3[1]) + "</h3>"); continue; }
+    const h2 = line.match(/^##\s+(.+)/);
+    if (h2) { closeList(); out.push("<h2>" + inlineMarkdown(h2[1]) + "</h2>"); continue; }
+    const h1 = line.match(/^#\s+(.+)/);
+    if (h1) { closeList(); out.push("<h1>" + inlineMarkdown(h1[1]) + "</h1>"); continue; }
+
+    // Horizontal rule
+    if (line.match(/^---+$/)) { closeList(); out.push("<hr>"); continue; }
+
+    // Unordered list
+    if (line.match(/^[-*]\s+/)) {
+      if (!inList) { out.push("<ul>"); inList = true; }
+      out.push("<li>" + inlineMarkdown(line.replace(/^[-*]\s+/, "")) + "</li>");
+      continue;
+    }
+
+    // Ordered list
+    const ol = line.match(/^(\d+)\.\s+(.+)/);
+    if (ol) {
+      if (!inList) { out.push("<ol>"); inList = true; }
+      out.push("<li>" + inlineMarkdown(ol[2]) + "</li>");
+      continue;
+    }
+
+    // Close list if we hit a non-list line
+    closeList();
+
+    // Empty line = paragraph break
+    if (line.trim() === "") {
+      continue;
+    }
+
+    // Regular paragraph
+    out.push("<p>" + inlineMarkdown(line) + "</p>");
+  }
+  closeList();
+
+  function closeList() {
+    if (inList) {
+      // Detect if it was ordered or unordered by checking last open tag
+      const lastOpen = out.findLast(l => l === "<ul>" || l === "<ol>");
+      out.push(lastOpen === "<ol>" ? "</ol>" : "</ul>");
+      inList = false;
+    }
+  }
+
+  return out.join("\n");
+}
+
+function inlineMarkdown(text) {
+  return text
+    // Bold + italic
+    .replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>")
+    // Bold
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    // Italic
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/_(.+?)_/g, "<em>$1</em>")
+    // Inline code
+    .replace(/`(.+?)`/g, "<code>$1</code>");
+}
+
 // ── DOM refs ───────────────────────────────────────────
 const messagesEl = document.getElementById("messages");
 const inputEl = document.getElementById("input");
@@ -341,6 +463,7 @@ let mediaRecorder = null;
 let audioChunks = [];
 let acIndex = -1;
 let streamingBubble = null;
+let streamingRawText = "";
 let pendingTraceLines = [];
 
 // ── WebSocket ──────────────────────────────────────────
@@ -373,6 +496,7 @@ function connect() {
       case "stream_start":
         typingEl.classList.remove("active");
         pendingTraceLines = [];
+        streamingRawText = "";
         streamingBubble = document.createElement("div");
         streamingBubble.className = "msg dm";
         streamingBubble.textContent = "";
@@ -381,16 +505,22 @@ function connect() {
         break;
       case "stream_delta":
         if (streamingBubble) {
-          streamingBubble.textContent += msg.text;
+          streamingRawText += msg.text;
+          streamingBubble.textContent = streamingRawText;
           scrollToBottom();
         }
         break;
       case "stream_end":
         typingEl.classList.remove("active");
         if (streamingBubble) {
-          if (msg.text) streamingBubble.textContent = msg.text;
-          if (!streamingBubble.textContent.trim()) streamingBubble.remove();
+          const finalText = msg.text || streamingRawText;
+          if (finalText.trim()) {
+            streamingBubble.innerHTML = renderMd(finalText);
+          } else {
+            streamingBubble.remove();
+          }
           streamingBubble = null;
+          streamingRawText = "";
         }
         if (msg.forks && msg.forks.length > 0) addKeyboard(msg.forks);
         break;
@@ -414,7 +544,7 @@ function addDmMessage(text, forks) {
   typingEl.classList.remove("active");
   const el = document.createElement("div");
   el.className = "msg dm";
-  el.textContent = text;
+  el.innerHTML = renderMd(text);
   messagesEl.appendChild(el);
   if (forks && forks.length > 0) addKeyboard(forks);
   scrollToBottom();
@@ -432,7 +562,7 @@ function addErrorMessage(text) {
   typingEl.classList.remove("active");
   const el = document.createElement("div");
   el.className = "msg error";
-  el.textContent = text;
+  el.innerHTML = renderMd(text);
   messagesEl.appendChild(el);
   scrollToBottom();
 }
